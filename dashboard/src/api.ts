@@ -15,5 +15,6 @@ export const api = {
   stats:      ()           => get<OverallStats>("/stats/"),
   dailyStats: (days = 30)  => get<DailyStats[]>(`/stats/daily?days=${days}`),
   users:      ()           => get<User[]>("/users/"),
-  brews:      (limit = 20) => get<Brew[]>(`/brews/?limit=${limit}`),
+  brews:      (limit = 20, kind: string | null = "brew") =>
+    get<Brew[]>(`/brews/?limit=${limit}${kind ? `&kind=${kind}` : ""}`),
 }

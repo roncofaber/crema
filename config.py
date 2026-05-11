@@ -24,4 +24,5 @@ FONT_SIZE_LARGE  = 40
 SCANNER_DEVICE_NAME = "MINJCODE MINJCODE MJ2818A"
 
 # Database
-DB_PATH = "data/espresso.db"
+import os as _os
+DB_PATH = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "data", "espresso.db")

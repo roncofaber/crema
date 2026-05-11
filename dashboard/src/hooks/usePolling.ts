@@ -3,6 +3,7 @@ import { useEffect, useState } from "react"
 export function usePolling<T>(
   fn: () => Promise<T>,
   intervalMs: number,
+  deps: unknown[] = [],
 ): { data: T | null; error: string | null } {
   const [data, setData]   = useState<T | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -22,9 +23,9 @@ export function usePolling<T>(
     tick()
     const id = setInterval(tick, intervalMs)
     return () => { cancelled = true; clearInterval(id) }
-  // fn changes identity every render; interval and fn logic are stable
+  // fn changes identity every render; callers use deps[] for explicit re-triggers
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [intervalMs])
+  }, [intervalMs, ...deps])
 
   return { data, error }
 }
