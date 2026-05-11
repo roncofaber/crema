@@ -4,7 +4,7 @@ import time
 import core.db as db
 from core.events import QRScanned, BrewStart, BrewEnd
 from config import (
-    ARMED_TIMEOUT, SESSION_TIMEOUT, SUMMARY_DURATION, MIN_BREW_DURATION, LOGOUT_MIN_TIME
+    ARMED_TIMEOUT, SESSION_TIMEOUT, SUMMARY_DURATION, MIN_BREW_DURATION
 )
 
 log = logging.getLogger(__name__)
@@ -95,14 +95,8 @@ class SessionState:
 
         elif self.state == State.ARMED:
             if token == self._user["token"]:
-                if self.time_in_state() < LOGOUT_MIN_TIME:
-                    log.debug("re-scan ignored (too soon, %.1fs in state)", self.time_in_state())
-                    return
-                log.info("user %r logged out", self._user["name"])
-                db.end_session(self._session_id)
-                self._reset()
-                self.transition(State.IDLE)
-                self._display.show_idle()
+                log.debug("re-scan ignored for current user")
+                return
             else:
                 log.info("handoff: %r -> new scan", self._user["name"])
                 db.end_session(self._session_id)

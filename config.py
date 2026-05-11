@@ -10,7 +10,6 @@ SENSOR_POLL_INTERVAL = 0.01 # seconds between GPIO reads (10 ms)
 
 # Session timeouts
 ARMED_TIMEOUT   = 120   # seconds waiting for machine after scan (no brew yet)
-LOGOUT_MIN_TIME = 30    # seconds in ARMED before a re-scan can log the user out
 SESSION_TIMEOUT = 300   # seconds of inactivity after last brew before auto-logout
 SUMMARY_DURATION = 5    # seconds to display summary screen before returning to idle
 
