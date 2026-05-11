@@ -67,3 +67,48 @@ def test_patch_user_name_conflict(client):
     db_module.get_or_create_user("bob@example.com")
     resp = client.patch("/users/alice", json={"name": "bob"})
     assert resp.status_code == 409
+
+
+import time as time_mod
+
+
+def test_list_brews_empty(client):
+    resp = client.get("/brews/")
+    assert resp.status_code == 200
+    assert resp.json() == []
+
+
+def test_list_brews(client):
+    user = db_module.get_or_create_user("alice@example.com")
+    sid = db_module.start_session(user["id"])
+    now = time_mod.time()
+    db_module.log_brew(sid, now - 30, now, "brew")
+    resp = client.get("/brews/")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data) == 1
+    assert data[0]["user"] == "alice"
+    assert data[0]["kind"] == "brew"
+
+
+def test_list_brews_filter_user(client):
+    alice = db_module.get_or_create_user("alice@example.com")
+    bob   = db_module.get_or_create_user("bob@example.com")
+    now = time_mod.time()
+    db_module.log_brew(db_module.start_session(alice["id"]), now - 30, now, "brew")
+    db_module.log_brew(db_module.start_session(bob["id"]),   now - 30, now, "brew")
+    resp = client.get("/brews/?user=alice")
+    assert resp.status_code == 200
+    assert len(resp.json()) == 1
+
+
+def test_list_brews_filter_kind(client):
+    user = db_module.get_or_create_user("alice@example.com")
+    sid = db_module.start_session(user["id"])
+    now = time_mod.time()
+    db_module.log_brew(sid, now - 30, now, "brew")
+    db_module.log_brew(sid, now - 5,  now, "noise")
+    resp = client.get("/brews/?kind=noise")
+    assert resp.status_code == 200
+    assert len(resp.json()) == 1
+    assert resp.json()[0]["kind"] == "noise"
