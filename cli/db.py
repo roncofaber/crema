@@ -86,34 +86,3 @@ def export(output):
         click.echo(f"Exported {len(rows)} rows to {output}.")
 
 
-@db.command("delete-user")
-@click.argument("name")
-def delete_user(name):
-    """Delete a user and all their sessions and brews."""
-    con = get_con()
-    user = con.execute(
-        "SELECT id, name FROM users WHERE name = ?", (name,)
-    ).fetchone()
-
-    if not user:
-        raise click.ClickException(f"User '{name}' not found.")
-
-    brews = con.execute("""
-        SELECT COUNT(*) FROM brews b
-        JOIN sessions s ON b.session_id = s.id
-        WHERE s.user_id = ?
-    """, (user[0],)).fetchone()[0]
-
-    click.echo(f"Will delete user '{user[1]}' and {brews} brew(s).")
-    click.confirm("Proceed?", abort=True)
-
-    con.execute("""
-        DELETE FROM brews WHERE session_id IN (
-            SELECT id FROM sessions WHERE user_id = ?
-        )
-    """, (user[0],))
-    con.execute("DELETE FROM sessions WHERE user_id = ?", (user[0],))
-    con.execute("DELETE FROM users WHERE id = ?", (user[0],))
-    con.commit()
-    click.echo("Done.")
-    con.close()

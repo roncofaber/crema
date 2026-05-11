@@ -1,8 +1,9 @@
 import click
 
-from cli.stats import stats
 from cli.db import db
 from cli.sensor import sensor
+from cli.stats import stats
+from cli.users import users
 
 
 @click.group()
@@ -12,4 +13,5 @@ def cli():
 
 cli.add_command(stats)
 cli.add_command(db)
+cli.add_command(users)
 cli.add_command(sensor)
