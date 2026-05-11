@@ -1,21 +1,9 @@
-"""
-Terminal dashboard for CREMA.
-Run from the repo root: python tools/stats.py
-"""
 import sqlite3
-import sys
 import time
-from pathlib import Path
 
-# allow running from any directory
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import click
+
 from config import DB_PATH, MIN_BREW_DURATION
-
-DB_PATH = Path(__file__).resolve().parent.parent / DB_PATH
-
-
-def get_con():
-    return sqlite3.connect(DB_PATH)
 
 
 def fmt_duration(seconds):
@@ -42,24 +30,25 @@ def print_table(headers, rows, col_sep="  "):
         for i, cell in enumerate(row):
             widths[i] = max(widths[i], len(str(cell)))
     fmt = col_sep.join(f"{{:<{w}}}" for w in widths)
-    print(fmt.format(*headers))
-    print("  ".join("-" * w for w in widths))
+    click.echo(fmt.format(*headers))
+    click.echo("  ".join("-" * w for w in widths))
     for row in rows:
-        print(fmt.format(*[str(c) for c in row]))
+        click.echo(fmt.format(*[str(c) for c in row]))
 
 
 def section(title):
-    print(f"\n{title}")
-    print("=" * len(title))
+    click.echo(f"\n{title}")
+    click.echo("=" * len(title))
 
 
-def main():
+@click.command()
+def stats():
+    """Show the stats dashboard."""
     try:
-        con = get_con()
+        con = sqlite3.connect(DB_PATH)
     except Exception as e:
-        sys.exit(f"Cannot open database: {e}")
+        raise click.ClickException(f"Cannot open database: {e}")
 
-    # --- all-time leaderboard ---
     section("All-time leaderboard")
     rows = con.execute("""
         SELECT
@@ -80,9 +69,8 @@ def main():
             [(r[0], r[1], fmt_duration(r[2] * 60), fmt_ts(r[3])) for r in rows],
         )
     else:
-        print("No brews logged yet.")
+        click.echo("No brews logged yet.")
 
-    # --- recent brews ---
     section("Recent brews (last 20)")
     rows = con.execute("""
         SELECT
@@ -102,22 +90,17 @@ def main():
             [(r[0], fmt_ts(r[1]), fmt_duration(r[2]), r[3]) for r in rows],
         )
     else:
-        print("No brews logged yet.")
+        click.echo("No brews logged yet.")
 
-    # --- noise summary ---
     section("Noise events")
     row = con.execute("""
         SELECT COUNT(*), ROUND(AVG(duration), 1), ROUND(MAX(duration), 1)
         FROM brews WHERE kind = 'noise'
     """).fetchone()
     if row[0]:
-        print(f"Count: {row[0]}  avg duration: {fmt_duration(row[1])}  max: {fmt_duration(row[2])}")
-        print(f"(threshold for 'brew' is {MIN_BREW_DURATION}s)")
+        click.echo(f"Count: {row[0]}  avg duration: {fmt_duration(row[1])}  max: {fmt_duration(row[2])}")
+        click.echo(f"(threshold for 'brew' is {MIN_BREW_DURATION}s)")
     else:
-        print("No noise events logged.")
+        click.echo("No noise events logged.")
 
     con.close()
-
-
-if __name__ == "__main__":
-    main()

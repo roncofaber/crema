@@ -7,8 +7,12 @@ dependencies = [
     "evdev",
     "adafruit-circuitpython-rgb-display",
     "Pillow",
+    "click",
 ]
+
+[project.scripts]
+crema = "cli.main:cli"
 
 [tool.setuptools]
 py-modules = ["config", "main"]
-packages   = ["core", "hardware"]
+packages   = ["core", "hardware", "cli"]
