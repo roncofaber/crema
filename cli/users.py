@@ -134,6 +134,50 @@ def show(name):
 
 @users.command()
 @click.argument("name")
+def edit(name):
+    """Open a user record in $EDITOR for editing."""
+    con = get_con()
+    user = find_user(con, name)
+
+    original = f"name: {user[1]}\ntoken: {user[2]}\n"
+    edited = click.edit(original)
+
+    if edited is None or edited == original:
+        click.echo("No changes.")
+        con.close()
+        return
+
+    fields = {}
+    for line in edited.splitlines():
+        if ":" in line:
+            key, _, val = line.partition(":")
+            fields[key.strip()] = val.strip()
+
+    new_name  = fields.get("name",  user[1])
+    new_token = fields.get("token", user[2])
+
+    if new_name != user[1]:
+        taken = con.execute(
+            "SELECT id FROM users WHERE name = ? AND id != ?", (new_name, user[0])
+        ).fetchone()
+        if taken:
+            raise click.ClickException(f"Name '{new_name}' is already taken.")
+
+    if new_token != user[2]:
+        taken = con.execute(
+            "SELECT id FROM users WHERE token = ? AND id != ?", (new_token, user[0])
+        ).fetchone()
+        if taken:
+            raise click.ClickException(f"Token '{new_token}' is already in use.")
+
+    con.execute("UPDATE users SET name = ?, token = ? WHERE id = ?", (new_name, new_token, user[0]))
+    con.commit()
+    click.echo(f"Updated '{user[1]}'.")
+    con.close()
+
+
+@users.command()
+@click.argument("name")
 @click.argument("new_name")
 def rename(name, new_name):
     """Rename a user."""
