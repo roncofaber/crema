@@ -147,3 +147,22 @@ def test_daily_stats(client):
     data = resp.json()
     assert len(data) == 1
     assert data[0]["brews"] == 1
+
+
+def test_status_idle(client):
+    resp = client.get("/status")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["state"] == "idle"
+    assert data["user"] is None
+
+
+def test_status_active(client):
+    alice = db_module.get_or_create_user("alice@example.com")
+    db_module.start_session(alice["id"])
+    resp = client.get("/status")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["state"] == "active"
+    assert data["user"] == "alice"
+    assert data["session_started_at"] is not None
