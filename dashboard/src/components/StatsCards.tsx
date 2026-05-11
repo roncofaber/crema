@@ -1,6 +1,5 @@
 import { api } from "../api"
 import { usePolling } from "../hooks/usePolling"
-import type { OverallStats } from "../types"
 
 function fmt(seconds: number): string {
   const h = Math.floor(seconds / 3600)
@@ -18,15 +17,15 @@ export function StatsCards() {
     { label: "All time",        value: stats.total_brews },
     { label: "Users",           value: stats.total_users },
     { label: "Total brew time", value: fmt(stats.total_brew_time) },
-    { label: "Top brewer",      value: stats.top_brewer ?? "-" },
+    { label: "Top brewer",      value: stats.top_brewer ?? "—" },
   ]
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
       {cards.map(c => (
-        <div key={c.label} className="bg-gray-800 rounded-lg p-4">
-          <div className="text-2xl font-bold">{c.value}</div>
-          <div className="text-sm text-gray-400 mt-1">{c.label}</div>
+        <div key={c.label} className="bg-espresso-800 rounded p-5 border-t-2 border-crema-500">
+          <div className="font-plex text-3xl font-medium text-parchment-100">{c.value}</div>
+          <div className="text-xs uppercase tracking-widest text-parchment-600 mt-2">{c.label}</div>
         </div>
       ))}
     </div>

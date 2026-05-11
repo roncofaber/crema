@@ -22,12 +22,19 @@ export function StatusBadge() {
   const { data: status } = usePolling(api.status, 5000)
   const elapsed = useElapsed(status?.session_started_at ?? null)
 
-  if (!status) return <span className="text-gray-500 text-sm">connecting...</span>
+  if (!status) return <span className="font-plex text-sm text-parchment-700">—</span>
 
   const active = status.state === "active"
+
+  if (!active) return <span className="font-plex text-sm text-parchment-600">idle</span>
+
   return (
-    <span className={`text-sm font-medium ${active ? "text-green-400" : "text-gray-500"}`}>
-      {active ? `${status.user} is brewing (${elapsed})` : "idle"}
+    <span className="flex items-center gap-2 font-plex text-sm text-crema-400">
+      <span className="relative flex h-2 w-2">
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-crema-400 opacity-60" />
+        <span className="relative inline-flex rounded-full h-2 w-2 bg-crema-500" />
+      </span>
+      {status.user} — {elapsed}
     </span>
   )
 }
