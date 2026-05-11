@@ -1,18 +1,21 @@
 from dataclasses import dataclass
 
 
-@dataclass
+@dataclass(frozen=True)
 class QRScanned:
     token: str
 
 
-@dataclass
+@dataclass(frozen=True)
 class BrewStart:
     pass
 
 
-@dataclass
+@dataclass(frozen=True)
 class BrewEnd:
-    started_at: float   # Unix timestamp — first confirmed vibration
-    ended_at:   float   # Unix timestamp — last valid HIGH pulse
-    duration:   float   # seconds (ended_at - started_at)
+    started_at: float
+    ended_at:   float
+
+    @property
+    def duration(self) -> float:
+        return self.ended_at - self.started_at
