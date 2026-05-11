@@ -14,7 +14,7 @@ A Raspberry Pi kiosk that tracks who makes espresso, how many shots, and for how
 ## Setup
 
 ```bash
-pip install -r requirements.txt
+pip install RPi.GPIO evdev adafruit-circuitpython-rgb-display Pillow
 python main.py
 ```
 

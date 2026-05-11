@@ -1,7 +1,13 @@
 [project]
-name = "espresso"
+name = "crema"
 version = "0.1.0"
 requires-python = ">=3.11"
+dependencies = [
+    "RPi.GPIO",
+    "evdev",
+    "adafruit-circuitpython-rgb-display",
+    "Pillow",
+]
 
 [tool.setuptools]
 py-modules = ["config", "main"]
