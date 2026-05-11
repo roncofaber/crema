@@ -1,5 +1,7 @@
+import os
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from api.auth import verify_token
 from api.routers import users, brews, stats, status
 
@@ -23,3 +25,8 @@ app.include_router(status.router,                   tags=["status"], dependencie
 @app.get("/")
 def root():
     return {"status": "ok"}
+
+
+_DIST = os.path.join(os.path.dirname(__file__), "..", "dashboard", "dist")
+if os.path.isdir(_DIST):
+    app.mount("/ui", StaticFiles(directory=_DIST, html=True), name="dashboard")
