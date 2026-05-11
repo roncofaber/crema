@@ -5,7 +5,13 @@ Run from the repo root: python tools/stats.py
 import sqlite3
 import sys
 import time
+from pathlib import Path
+
+# allow running from any directory
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from config import DB_PATH, MIN_BREW_DURATION
+
+DB_PATH = Path(__file__).resolve().parent.parent / DB_PATH
 
 
 def get_con():
