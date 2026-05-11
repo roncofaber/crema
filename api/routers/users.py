@@ -1,7 +1,7 @@
 import sqlite3
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from api.deps import get_db
-from api.schemas import User, UserUpdate
+from api.schemas import User, UserUpdate, Brew
 
 router = APIRouter()
 
@@ -57,3 +57,48 @@ def update_user(name: str, body: UserUpdate, db: sqlite3.Connection = Depends(ge
 
     db.commit()
     return get_user(body.name or name, db)
+
+
+@router.get("/{name}/brews", response_model=list[Brew])
+def get_user_brews(
+    name: str,
+    kind: str | None = Query(None),
+    limit: int = Query(50, le=500),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    user = db.execute("SELECT id FROM users WHERE name = ?", (name,)).fetchone()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    clauses = ["s.user_id = ?"]
+    params: list = [user["id"]]
+    if kind:
+        clauses.append("b.kind = ?")
+        params.append(kind)
+    params.append(limit)
+
+    rows = db.execute(f"""
+        SELECT b.id, u.name AS user, b.started_at, b.ended_at, b.duration, b.kind
+        FROM brews b
+        JOIN sessions s ON b.session_id = s.id
+        JOIN users u    ON s.user_id    = u.id
+        WHERE {' AND '.join(clauses)}
+        ORDER BY b.started_at DESC
+        LIMIT ?
+    """, params).fetchall()
+    return [dict(r) for r in rows]
+
+
+@router.delete("/{name}", status_code=204)
+def delete_user(name: str, db: sqlite3.Connection = Depends(get_db)):
+    user = db.execute("SELECT id FROM users WHERE name = ?", (name,)).fetchone()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    db.execute("""
+        DELETE FROM brews WHERE session_id IN (
+            SELECT id FROM sessions WHERE user_id = ?
+        )
+    """, (user["id"],))
+    db.execute("DELETE FROM sessions WHERE user_id = ?", (user["id"],))
+    db.execute("DELETE FROM users WHERE id = ?", (user["id"],))
+    db.commit()

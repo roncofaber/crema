@@ -166,3 +166,40 @@ def test_status_active(client):
     assert data["state"] == "active"
     assert data["user"] == "alice"
     assert data["session_started_at"] is not None
+
+
+def test_get_user_brews(client):
+    alice = db_module.get_or_create_user("alice@example.com")
+    sid = db_module.start_session(alice["id"])
+    now = time_mod.time()
+    db_module.log_brew(sid, now - 30, now, "brew")
+    db_module.log_brew(sid, now - 5,  now, "noise")
+    resp = client.get("/users/alice/brews")
+    assert resp.status_code == 200
+    assert len(resp.json()) == 2
+
+
+def test_get_user_brews_filter_kind(client):
+    alice = db_module.get_or_create_user("alice@example.com")
+    sid = db_module.start_session(alice["id"])
+    now = time_mod.time()
+    db_module.log_brew(sid, now - 30, now, "brew")
+    db_module.log_brew(sid, now - 5,  now, "noise")
+    resp = client.get("/users/alice/brews?kind=brew")
+    assert resp.status_code == 200
+    assert len(resp.json()) == 1
+    assert resp.json()[0]["kind"] == "brew"
+
+
+def test_delete_user(client):
+    alice = db_module.get_or_create_user("alice@example.com")
+    sid = db_module.start_session(alice["id"])
+    db_module.log_brew(sid, time_mod.time() - 30, time_mod.time(), "brew")
+    resp = client.delete("/users/alice")
+    assert resp.status_code == 204
+    assert client.get("/users/alice").status_code == 404
+
+
+def test_delete_user_not_found(client):
+    resp = client.delete("/users/nobody")
+    assert resp.status_code == 404

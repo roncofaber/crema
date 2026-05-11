@@ -1,0 +1,17 @@
+[Unit]
+Description=CREMA Kiosk
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=roncofaber
+WorkingDirectory=/home/roncofaber/crema
+ExecStart=/home/roncofaber/crema/venv/bin/python main.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
