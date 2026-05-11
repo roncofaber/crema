@@ -38,9 +38,11 @@ export default function App() {
           <span className="text-xs uppercase tracking-[0.2em] text-crema-400">Crema</span>
           <span className="h-px w-12 bg-border" />
         </div>
-        <div className="mt-4">
-          <StatusBadge />
-        </div>
+        {!brewing && (
+          <div className="mt-4">
+            <StatusBadge />
+          </div>
+        )}
       </div>
 
       {/* Brewing now strip */}
