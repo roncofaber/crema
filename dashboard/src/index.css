@@ -2,30 +2,30 @@
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400;1,600&family=IBM+Plex+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap');
 
 @theme {
-  /* Backgrounds */
-  --color-bg:      #211408;
-  --color-surface: #301d0c;
-  --color-raised:  #3e2610;
+  /* Ground and surfaces — cream paper over warm tan */
+  --color-bg:            #dbc1ac;
+  --color-surface:       #ece0d1;
+  --color-raised:        #d4bca0;
 
   /* Borders */
-  --color-border:  #4e3018;
-  --color-border-subtle: #3a2212;
+  --color-border:        #c4a88a;
+  --color-border-subtle: #d4bca0;
 
-  /* Crema accent — warm amber gold */
-  --color-crema-300: #f0c060;
-  --color-crema-400: #d4920a;
-  --color-crema-500: #b87818;
+  /* Accent — amber crema on cream bg */
+  --color-crema-300:     #e09830;
+  --color-crema-400:     #b87018;
+  --color-crema-500:     #8a5010;
 
-  /* Text */
-  --color-ink:     #f0e2c8;
-  --color-muted:   #9a7e60;
-  --color-faint:   #6a5240;
+  /* Text — dark espresso scale */
+  --color-ink:           #38220f;
+  --color-muted:         #634832;
+  --color-faint:         #967259;
 }
 
 body {
   font-family: 'DM Sans', system-ui, sans-serif;
-  background-color: #211408;
-  color: #f0e2c8;
+  background-color: #dbc1ac;
+  color: #38220f;
 }
 
 .font-display {

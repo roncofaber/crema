@@ -17,19 +17,19 @@ export function DailyChart() {
         : (
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={data} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#3a2212" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#d4bca0" vertical={false} />
               <XAxis
                 dataKey="date"
-                tick={{ fill: "#9a7e60", fontSize: 11, fontFamily: "'IBM Plex Mono'" }}
+                tick={{ fill: "#967259", fontSize: 11, fontFamily: "'IBM Plex Mono'" }}
                 tickFormatter={d => d.slice(5)}
               />
-              <YAxis tick={{ fill: "#9a7e60", fontSize: 11, fontFamily: "'IBM Plex Mono'" }} allowDecimals={false} />
+              <YAxis tick={{ fill: "#967259", fontSize: 11, fontFamily: "'IBM Plex Mono'" }} allowDecimals={false} />
               <Tooltip
-                contentStyle={{ backgroundColor: "#301d0c", border: "1px solid #4e3018", borderRadius: "4px" }}
-                labelStyle={{ color: "#f0e2c8", fontFamily: "'IBM Plex Mono'", fontSize: 12 }}
-                itemStyle={{ color: "#d4920a", fontFamily: "'IBM Plex Mono'", fontSize: 12 }}
+                contentStyle={{ backgroundColor: "#ece0d1", border: "1px solid #c4a88a", borderRadius: "4px" }}
+                labelStyle={{ color: "#38220f", fontFamily: "'IBM Plex Mono'", fontSize: 12 }}
+                itemStyle={{ color: "#b87018", fontFamily: "'IBM Plex Mono'", fontSize: 12 }}
               />
-              <Bar dataKey="brews" fill="#d4920a" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="brews" fill="#b87018" radius={[3, 3, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         )
