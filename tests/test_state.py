@@ -50,11 +50,11 @@ def test_armed_brew_start_transitions_to_brewing(state, mock_display):
     mock_display.show_brewing.assert_called_with("bob", 0, pytest.approx(0, abs=1))
 
 
-def test_armed_same_user_scan_cancels_session(state, mock_display):
+def test_armed_same_user_scan_is_ignored(state, mock_display):
     state.handle(QRScanned(token="carol@example.com"))
     state.handle(QRScanned(token="carol@example.com"))
-    assert state.state == State.IDLE
-    mock_display.show_idle.assert_called()
+    assert state.state == State.ARMED
+    assert state._user["name"] == "carol"
 
 
 def test_armed_different_user_scan_swaps_session(state, mock_display):
