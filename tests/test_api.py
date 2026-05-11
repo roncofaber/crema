@@ -203,3 +203,26 @@ def test_delete_user(client):
 def test_delete_user_not_found(client):
     resp = client.delete("/users/nobody")
     assert resp.status_code == 404
+
+
+def test_auth_disabled_by_default(client):
+    resp = client.get("/users/")
+    assert resp.status_code == 200
+
+
+def test_auth_required_when_token_set(client, monkeypatch):
+    monkeypatch.setattr("api.auth._TOKEN", "secret")
+    resp = client.get("/users/")
+    assert resp.status_code == 401
+
+
+def test_auth_valid_token(client, monkeypatch):
+    monkeypatch.setattr("api.auth._TOKEN", "secret")
+    resp = client.get("/users/", headers={"Authorization": "Bearer secret"})
+    assert resp.status_code == 200
+
+
+def test_auth_invalid_token(client, monkeypatch):
+    monkeypatch.setattr("api.auth._TOKEN", "secret")
+    resp = client.get("/users/", headers={"Authorization": "Bearer wrong"})
+    assert resp.status_code == 401
