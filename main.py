@@ -1,4 +1,6 @@
 import time
+from queue import Queue
+
 import core.db as db
 from core.state import SessionState
 from hardware.display import Display
@@ -9,20 +11,11 @@ from hardware.sensor import VibrationSensor
 def main():
     db.init_db()
 
-    session = SessionState()
+    q       = Queue()
     display = Display()
-
-    def on_qr(token: str):
-        session.on_qr_scan(token)
-
-    def on_brew_start():
-        session.on_vibration_start()
-
-    def on_brew_end(duration: float):
-        session.on_vibration_end(duration)
-
-    scanner = QRScanner(on_scan=on_qr)
-    sensor  = VibrationSensor(on_brew_start=on_brew_start, on_brew_end=on_brew_end)
+    state   = SessionState(display)
+    scanner = QRScanner(q, device_path=None)  # set device_path for production evdev
+    sensor  = VibrationSensor(q)
 
     scanner.start()
     sensor.start()
@@ -31,7 +24,9 @@ def main():
 
     try:
         while True:
-            session.on_tick()
+            state.on_tick()
+            while not q.empty():
+                state.handle(q.get_nowait())
             time.sleep(1)
     except KeyboardInterrupt:
         pass
