@@ -22,11 +22,11 @@ export function StatusBadge() {
   const { data: status } = usePolling(api.status, 5000)
   const elapsed = useElapsed(status?.session_started_at ?? null)
 
-  if (!status) return <span className="font-plex text-sm text-parchment-700">—</span>
+  if (!status) return <span className="font-plex text-sm text-faint">—</span>
 
   const active = status.state === "active"
 
-  if (!active) return <span className="font-plex text-sm text-parchment-600">idle</span>
+  if (!active) return <span className="font-plex text-sm text-muted">idle</span>
 
   return (
     <span className="flex items-center gap-2 font-plex text-sm text-crema-400">

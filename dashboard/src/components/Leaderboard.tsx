@@ -1,5 +1,6 @@
 import { api } from "../api"
 import { usePolling } from "../hooks/usePolling"
+import { SkeletonRow } from "./Skeleton"
 
 function fmt(seconds: number): string {
   const h = Math.floor(seconds / 3600)
@@ -16,27 +17,30 @@ export function Leaderboard() {
   const { data: users } = usePolling(api.users, 30_000)
 
   return (
-    <div className="bg-espresso-800 rounded overflow-hidden">
+    <div className="bg-surface rounded overflow-hidden">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-espresso-600">
-            <th className="text-left px-4 py-3 text-xs uppercase tracking-widest text-parchment-600 font-normal w-8">#</th>
-            <th className="text-left px-4 py-3 text-xs uppercase tracking-widest text-parchment-600 font-normal">Name</th>
-            <th className="text-right px-4 py-3 text-xs uppercase tracking-widest text-parchment-600 font-normal">Brews</th>
-            <th className="text-right px-4 py-3 text-xs uppercase tracking-widest text-parchment-600 font-normal">Time</th>
-            <th className="text-right px-4 py-3 text-xs uppercase tracking-widest text-parchment-600 font-normal">Last</th>
+          <tr className="border-b border-border">
+            <th className="text-left px-4 py-3 text-xs uppercase tracking-widest text-muted font-normal w-8">#</th>
+            <th className="text-left px-4 py-3 text-xs uppercase tracking-widest text-muted font-normal">Name</th>
+            <th className="text-right px-4 py-3 text-xs uppercase tracking-widest text-muted font-normal">Brews</th>
+            <th className="text-right px-4 py-3 text-xs uppercase tracking-widest text-muted font-normal">Time</th>
+            <th className="text-right px-4 py-3 text-xs uppercase tracking-widest text-muted font-normal">Last</th>
           </tr>
         </thead>
         <tbody>
-          {(users ?? []).map((u, i) => (
-            <tr key={u.id} className="border-b border-espresso-700 last:border-0">
-              <td className="px-4 py-3 font-plex text-xs text-parchment-600">{i + 1}</td>
-              <td className="px-4 py-3 text-parchment-100">{u.name}</td>
-              <td className="px-4 py-3 text-right font-plex text-crema-400">{u.total_brews}</td>
-              <td className="px-4 py-3 text-right font-plex text-xs text-parchment-400">{fmt(u.total_time)}</td>
-              <td className="px-4 py-3 text-right font-plex text-xs text-parchment-600">{fmtDate(u.last_brew)}</td>
-            </tr>
-          ))}
+          {users == null
+            ? Array.from({ length: 4 }).map((_, i) => <SkeletonRow key={i} cols={5} />)
+            : users.map((u, i) => (
+                <tr key={u.id} className="border-b border-border-subtle last:border-0">
+                  <td className="px-4 py-3 font-plex text-xs text-faint">{i + 1}</td>
+                  <td className="px-4 py-3 text-ink">{u.name}</td>
+                  <td className="px-4 py-3 text-right font-plex text-crema-400">{u.total_brews}</td>
+                  <td className="px-4 py-3 text-right font-plex text-xs text-muted">{fmt(u.total_time)}</td>
+                  <td className="px-4 py-3 text-right font-plex text-xs text-faint">{fmtDate(u.last_brew)}</td>
+                </tr>
+              ))
+          }
         </tbody>
       </table>
     </div>
