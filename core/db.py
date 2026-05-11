@@ -34,6 +34,11 @@ def init_db():
                 kind        TEXT NOT NULL       -- 'brew' or 'noise'
             );
         """)
+        # Close any sessions left open by a previous unclean shutdown.
+        con.execute(
+            "UPDATE sessions SET ended_at=? WHERE ended_at IS NULL",
+            (time.time(),),
+        )
 
 
 def get_or_create_user(token: str) -> dict:
