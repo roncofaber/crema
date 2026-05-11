@@ -106,11 +106,11 @@ class Display:
 
         if self._logo:
             x = (DISPLAY_WIDTH - self._logo.width) // 2
-            img.paste(self._logo, (x, 44), mask=self._logo)
+            img.paste(self._logo, (x, 20), mask=self._logo)
 
-        self._cx(draw, 140, "CAFFÈ CABRINI", self._f16, _CREAM)
-        self._rule(draw, 164, _FAINT, pad=40)
-        self._cx(draw, 171, "C R E M A", self._f12, _AMBER)
+        self._cx(draw, 112, "CAFFÈ CABRINI", self._f16, _CREAM)
+        self._rule(draw, 136, _FAINT, pad=40)
+        self._cx(draw, 143, "C R E M A", self._f12, _AMBER)
 
         self._bottom_strip(draw, "scan to brew")
         self._send(img)
@@ -125,11 +125,11 @@ class Display:
 
         self._rule(draw, 136, _FAINT)
         self._cx(draw, 150, "Start the machine", self._f16, _MUTED)
-        self._cx(draw, 176, "when ready", self._f16, _FAINT)
-
         if brew_count > 0:
             label = f"{brew_count} coffee{'s' if brew_count != 1 else ''} so far"
             self._bottom_strip(draw, label)
+        else:
+            self._cx(draw, 176, "when ready", self._f16, _FAINT)
 
         self._send(img)
 

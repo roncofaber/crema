@@ -20,8 +20,15 @@ def get_status(db: sqlite3.Connection = Depends(get_db)):
     if not row:
         return {"state": "idle", "user": None, "session_started_at": None}
 
+    brew = db.execute("""
+        SELECT 1 FROM brews b
+        JOIN sessions s ON b.session_id = s.id
+        WHERE s.ended_at IS NULL AND b.ended_at IS NULL
+        LIMIT 1
+    """).fetchone()
+
     return {
-        "state": "active",
+        "state": "brewing" if brew else "ready",
         "user": row["name"],
         "session_started_at": row["started_at"],
     }

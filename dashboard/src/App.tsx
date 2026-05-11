@@ -24,7 +24,7 @@ function useElapsed(startTs: number | null): string {
 export default function App() {
   const { data: status } = usePolling(api.status, 5000)
   const elapsed = useElapsed(status?.session_started_at ?? null)
-  const brewing = status?.state === "active"
+  const brewing = status?.state === "brewing"
 
   return (
     <div className="min-h-screen bg-bg text-ink flex flex-col">

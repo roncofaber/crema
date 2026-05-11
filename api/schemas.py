@@ -39,6 +39,6 @@ class DailyStats(BaseModel):
 
 
 class Status(BaseModel):
-    state: str          # 'idle' or 'active'
+    state: str          # 'idle' | 'ready' | 'brewing'
     user: str | None
     session_started_at: float | None
