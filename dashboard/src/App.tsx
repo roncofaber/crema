@@ -70,6 +70,21 @@ export default function App() {
         <RecentBrews />
       </main>
 
+      <footer className="border-t border-border mt-10 px-8 py-6 flex items-center justify-between">
+        <span className="font-plex text-xs text-faint">
+          © {new Date().getFullYear()} roncofaber
+        </span>
+        <span className="font-plex text-xs text-faint uppercase tracking-widest">CREMA</span>
+        <a
+          href="https://github.com/roncofaber/crema"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-plex text-xs text-faint hover:text-muted transition-colors"
+        >
+          github.com/roncofaber/crema
+        </a>
+      </footer>
+
     </div>
   )
 }
