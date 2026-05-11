@@ -58,10 +58,11 @@ class Display:
     def _send(self, img: Image.Image):
         self.disp.image(img.rotate(90, expand=True))
 
-    def _cx(self, draw, y, text, font, color=_CREAM):
+    def _cx(self, draw, y, text, font, color=_CREAM, pad=12):
+        text = self._truncate(draw, text, font, DISPLAY_WIDTH - pad * 2)
         bbox = draw.textbbox((0, 0), text, font=font)
         w = bbox[2] - bbox[0]
-        draw.text((max(0, (DISPLAY_WIDTH - w) // 2), y), text, fill=color, font=font)
+        draw.text((max(pad, (DISPLAY_WIDTH - w) // 2), y), text, fill=color, font=font)
 
     def _rule(self, draw, y, color=_FAINT, pad=28):
         draw.line([(pad, y), (DISPLAY_WIDTH - pad, y)], fill=color, width=1)
