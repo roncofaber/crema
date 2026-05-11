@@ -27,7 +27,7 @@ export default function App() {
   const brewing = status?.state === "active"
 
   return (
-    <div className="min-h-screen bg-bg text-ink">
+    <div className="min-h-screen bg-bg text-ink flex flex-col">
 
       {/* Unified hero block */}
       <div className="border-b border-border text-center px-8 pt-10 pb-6">
@@ -58,7 +58,7 @@ export default function App() {
         </div>
       )}
 
-      <main className="max-w-5xl mx-auto px-8 py-10 space-y-10">
+      <main className="flex-1 max-w-5xl mx-auto w-full px-8 py-10 space-y-10">
         <StatsCards />
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <div>
@@ -70,7 +70,7 @@ export default function App() {
         <RecentBrews />
       </main>
 
-      <footer className="border-t border-border mt-10 px-8 py-6 flex items-center justify-between">
+      <footer className="border-t border-border px-8 py-6 flex items-center justify-between">
         <span className="font-plex text-xs text-faint">
           © {new Date().getFullYear()} roncofaber
         </span>
