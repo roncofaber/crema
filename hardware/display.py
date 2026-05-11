@@ -28,9 +28,11 @@ class Display:
         bl.value = True
 
         spi = busio.SPI(clock=board.SCLK, MOSI=board.MOSI)
+        # Driver takes physical portrait dimensions (240×320); the canvas is
+        # drawn landscape (320×240) and rotated 90° in _send to fit.
         self.disp = st7789.ST7789(
             spi, cs=cs, dc=dc, rst=rst,
-            width=DISPLAY_WIDTH, height=DISPLAY_HEIGHT,
+            width=240, height=320,
             baudrate=24000000,
         )
 
