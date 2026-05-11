@@ -13,4 +13,5 @@ def test_db(tmp_path, monkeypatch):
 
 @pytest.fixture
 def mock_display():
+    # used by test_state.py
     return MagicMock()

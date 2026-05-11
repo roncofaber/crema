@@ -77,7 +77,7 @@ def log_brew(session_id: int | None, started_at: float, ended_at: float, kind: s
 
 
 def get_user_stats(user_id: int) -> dict:
-    """Return total brews, total brew time, last seen for a user."""
+    """Return total brews and total brew time (kind='brew' only) for a user."""
     with get_connection() as con:
         row = con.execute("""
             SELECT COUNT(*), COALESCE(SUM(b.duration), 0)
