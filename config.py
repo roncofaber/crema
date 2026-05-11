@@ -20,5 +20,8 @@ FONT_PATH        = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 FONT_SIZE_SMALL  = 20
 FONT_SIZE_LARGE  = 40
 
+# Hardware
+SCANNER_DEVICE_NAME = "MINJCODE MINJCODE MJ2818A"
+
 # Database
 DB_PATH = "data/espresso.db"

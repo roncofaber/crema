@@ -14,7 +14,7 @@ def main():
     q       = Queue()
     display = Display()
     state   = SessionState(display)
-    scanner = QRScanner(q, device_path=None)  # set device_path for production evdev
+    scanner = QRScanner(q, device_path=None)  # auto-detects by name; set explicitly to override
     sensor  = VibrationSensor(q)
 
     scanner.start()

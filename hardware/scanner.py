@@ -30,8 +30,21 @@ class QRScanner:
     def start(self):
         self._thread.start()
 
+    def _find_device_path(self) -> str | None:
+        from evdev import InputDevice, list_devices
+        from config import SCANNER_DEVICE_NAME
+        for path in list_devices():
+            try:
+                if InputDevice(path).name == SCANNER_DEVICE_NAME:
+                    return path
+            except Exception:
+                continue
+        return None
+
     def _run(self):
-        if self._device_path:
+        path = self._device_path or self._find_device_path()
+        if path:
+            self._device_path = path
             self._run_evdev()
         else:
             self._run_stdin()
