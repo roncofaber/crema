@@ -30,6 +30,7 @@ class SessionState:
         self._brew_start    = None
         self._pending_token = None
         self._summary_shown_at = None
+        self._last_display_tick = None
 
     def transition(self, new_state: State):
         log.info("state %s -> %s", self.state.name, new_state.name)
@@ -52,14 +53,23 @@ class SessionState:
         now = time.time()
 
         if self.state == State.ARMED:
+            now_sec = int(now)
             if self._last_brew_at is None:
-                if self.time_in_state() > ARMED_TIMEOUT:
+                time_in = self.time_in_state()
+                if time_in > ARMED_TIMEOUT:
                     db.end_session(self._session_id)
                     self._reset()
                     self.transition(State.IDLE)
                     self._display.show_idle()
+                elif self._last_display_tick != now_sec:
+                    self._last_display_tick = now_sec
+                    self._display.show_armed(
+                        self._user["name"], 0,
+                        ARMED_TIMEOUT - time_in, ARMED_TIMEOUT,
+                    )
             else:
-                if now - self._last_brew_at > SESSION_TIMEOUT:
+                idle_for = now - self._last_brew_at
+                if idle_for > SESSION_TIMEOUT:
                     if self._summary_shown_at is None:
                         stats = db.get_user_stats(self._user["id"])
                         self._display.show_summary(
@@ -73,6 +83,12 @@ class SessionState:
                         self._reset()
                         self.transition(State.IDLE)
                         self._display.show_idle()
+                elif self._last_display_tick != now_sec:
+                    self._last_display_tick = now_sec
+                    self._display.show_armed(
+                        self._user["name"], self._brew_count,
+                        SESSION_TIMEOUT - idle_for, SESSION_TIMEOUT,
+                    )
 
         elif self.state == State.BREWING:
             elapsed = now - self._brew_start
@@ -165,3 +181,4 @@ class SessionState:
         self._brew_start    = None
         self._pending_token = None
         self._summary_shown_at = None
+        self._last_display_tick = None

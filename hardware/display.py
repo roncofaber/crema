@@ -115,9 +115,12 @@ class Display:
         self._bottom_strip(draw, "scan to brew")
         self._send(img)
 
-    def show_armed(self, user_name: str, brew_count: int = 0):
+    def show_armed(self, user_name: str, brew_count: int = 0,
+                   time_remaining: float | None = None, timeout: float | None = None):
         img, draw = self._new_canvas()
-        self._accent_bars(draw)
+
+        # Top accent bar (static)
+        draw.rectangle([0, 0, DISPLAY_WIDTH, 5], fill=_AMBER)
 
         self._cx(draw, 56, "CIAO,", self._f16, _MUTED)
         name = self._truncate(draw, user_name.upper(), self._f32, DISPLAY_WIDTH - 24)
@@ -130,6 +133,15 @@ class Display:
             self._bottom_strip(draw, label)
         else:
             self._cx(draw, 176, "when ready", self._f16, _FAINT)
+
+        # Bottom: draining timer bar when countdown is active, static accent otherwise
+        if time_remaining is not None and timeout is not None:
+            frac = max(0.0, min(1.0, time_remaining / timeout))
+            draw.rectangle([0, DISPLAY_HEIGHT - 5, DISPLAY_WIDTH, DISPLAY_HEIGHT], fill=_FAINT)
+            if frac > 0:
+                draw.rectangle([0, DISPLAY_HEIGHT - 5, int(DISPLAY_WIDTH * frac), DISPLAY_HEIGHT], fill=_AMBER)
+        else:
+            draw.rectangle([0, DISPLAY_HEIGHT - 5, DISPLAY_WIDTH, DISPLAY_HEIGHT], fill=_AMBER)
 
         self._send(img)
 
