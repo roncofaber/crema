@@ -1,3 +1,4 @@
+import logging
 import threading
 import time
 import RPi.GPIO as GPIO
@@ -7,6 +8,8 @@ from config import (
     VIBRATION_PIN, BREW_END_SILENCE, MIN_VIBRATION_PULSE,
     BREW_CONFIRM_WINDOW, SENSOR_POLL_INTERVAL,
 )  # noqa: E402
+
+log = logging.getLogger(__name__)
 
 
 class VibrationSensor:
@@ -57,6 +60,7 @@ class VibrationSensor:
 
                 if not self._brew_start_fired:
                     if now - self._vibration_start >= BREW_CONFIRM_WINDOW:
+                        log.info("BrewStart fired")
                         self._queue.put(BrewStart())
                         self._brew_start_fired = True
         else:
@@ -65,6 +69,8 @@ class VibrationSensor:
             if self._last_valid_high is not None:
                 silence = now - self._last_valid_high
                 if silence >= BREW_END_SILENCE:
+                    duration = self._last_valid_high - self._vibration_start
+                    log.info("BrewEnd fired: duration=%.1fs silence=%.1fs", duration, silence)
                     self._queue.put(BrewEnd(
                         started_at=self._vibration_start,
                         ended_at=self._last_valid_high,

@@ -1,3 +1,4 @@
+import logging
 import time
 from queue import Queue
 
@@ -6,6 +7,12 @@ from core.state import SessionState
 from hardware.display import Display
 from hardware.scanner import QRScanner
 from hardware.sensor import VibrationSensor
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s %(levelname)-8s %(name)s: %(message)s",
+    datefmt="%H:%M:%S",
+)
 
 
 def main():

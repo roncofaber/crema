@@ -1,3 +1,4 @@
+import logging
 from enum import Enum, auto
 import time
 import core.db as db
@@ -5,6 +6,8 @@ from core.events import QRScanned, BrewStart, BrewEnd
 from config import (
     ARMED_TIMEOUT, SESSION_TIMEOUT, SUMMARY_DURATION, MIN_BREW_DURATION
 )
+
+log = logging.getLogger(__name__)
 
 
 class State(Enum):
@@ -29,6 +32,7 @@ class SessionState:
         self._summary_shown_at = None
 
     def transition(self, new_state: State):
+        log.info("state %s -> %s", self.state.name, new_state.name)
         self.state        = new_state
         self._state_since = time.time()
 
@@ -36,6 +40,7 @@ class SessionState:
         return time.time() - self._state_since
 
     def handle(self, event):
+        log.debug("event: %s", event)
         if isinstance(event, QRScanned):
             self._on_qr_scan(event.token)
         elif isinstance(event, BrewStart):
@@ -80,6 +85,7 @@ class SessionState:
     def _on_qr_scan(self, token: str):
         if self.state == State.IDLE:
             user = db.get_or_create_user(token)
+            log.info("user %r logged in (id=%s)", user["name"], user["id"])
             self._user       = user
             self._session_id = db.start_session(user["id"])
             self._brew_count = 0
@@ -89,13 +95,16 @@ class SessionState:
 
         elif self.state == State.ARMED:
             if token == self._user["token"]:
+                log.info("user %r logged out", self._user["name"])
                 db.end_session(self._session_id)
                 self._reset()
                 self.transition(State.IDLE)
                 self._display.show_idle()
             else:
+                log.info("handoff: %r -> new scan", self._user["name"])
                 db.end_session(self._session_id)
                 user = db.get_or_create_user(token)
+                log.info("user %r logged in (id=%s)", user["name"], user["id"])
                 self._user       = user
                 self._session_id = db.start_session(user["id"])
                 self._brew_count = 0
@@ -104,6 +113,7 @@ class SessionState:
                 self._display.show_armed(user["name"], 0)
 
         elif self.state == State.BREWING:
+            log.info("QR scan queued during brew: %s", token)
             self._pending_token = token
 
     def _on_brew_start(self):
@@ -120,6 +130,7 @@ class SessionState:
 
     def _on_brew_end(self, event: BrewEnd):
         kind = "brew" if event.duration >= MIN_BREW_DURATION else "noise"
+        log.info("brew ended: duration=%.1fs kind=%s", event.duration, kind)
 
         if self.state == State.BREWING:
             db.log_brew(self._session_id, event.started_at, event.ended_at, kind)

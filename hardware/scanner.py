@@ -1,8 +1,11 @@
+import logging
 import re
 import threading
 import sys
 from queue import Queue
 from core.events import QRScanned
+
+log = logging.getLogger(__name__)
 
 _EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
 
@@ -44,9 +47,11 @@ class QRScanner:
     def _run(self):
         path = self._device_path or self._find_device_path()
         if path:
+            log.info("scanner opened: %s", path)
             self._device_path = path
             self._run_evdev()
         else:
+            log.warning("scanner not found, falling back to stdin")
             self._run_stdin()
 
     def _run_stdin(self):
@@ -99,4 +104,7 @@ class QRScanner:
     def _handle_raw(self, raw: str):
         token = raw.strip().lower()
         if _is_email(token):
+            log.info("QR scan accepted: %s", token)
             self._queue.put(QRScanned(token=token))
+        elif token:
+            log.debug("QR scan rejected (not email): %s", token)
