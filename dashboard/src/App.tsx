@@ -1,4 +1,6 @@
 import { StatusBadge } from "./components/StatusBadge"
+import { StatsCards }  from "./components/StatsCards"
+import { Leaderboard } from "./components/Leaderboard"
 
 export default function App() {
   return (
@@ -8,7 +10,11 @@ export default function App() {
         <StatusBadge />
       </header>
       <main className="max-w-5xl mx-auto px-6 py-8 space-y-8">
-        <p className="text-gray-500 text-sm">Components loading...</p>
+        <StatsCards />
+        <div>
+          <h2 className="text-sm text-gray-400 mb-3">Leaderboard</h2>
+          <Leaderboard />
+        </div>
       </main>
     </div>
   )
