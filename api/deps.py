@@ -1,5 +1,5 @@
 import sqlite3
-from config import DB_PATH
+from config import DB_PATH  # noqa: F401
 
 
 def get_db():
