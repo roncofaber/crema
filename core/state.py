@@ -26,6 +26,7 @@ class SessionState:
         self._last_brew_at  = None
         self._brew_start    = None
         self._pending_token = None
+        self._summary_shown_at = None
 
     def transition(self, new_state: State):
         self.state        = new_state
@@ -54,17 +55,19 @@ class SessionState:
                     self._display.show_idle()
             else:
                 if now - self._last_brew_at > SESSION_TIMEOUT:
-                    stats = db.get_user_stats(self._user["id"])
-                    self._display.show_summary(
-                        self._user["name"],
-                        self._brew_count,
-                        stats["total_time"],
-                    )
-                    time.sleep(SUMMARY_DURATION)
-                    db.end_session(self._session_id)
-                    self._reset()
-                    self.transition(State.IDLE)
-                    self._display.show_idle()
+                    if self._summary_shown_at is None:
+                        stats = db.get_user_stats(self._user["id"])
+                        self._display.show_summary(
+                            self._user["name"],
+                            self._brew_count,
+                            stats["total_time"],
+                        )
+                        self._summary_shown_at = now
+                    elif now - self._summary_shown_at >= SUMMARY_DURATION:
+                        db.end_session(self._session_id)
+                        self._reset()
+                        self.transition(State.IDLE)
+                        self._display.show_idle()
 
         elif self.state == State.BREWING:
             elapsed = now - self._brew_start
@@ -153,3 +156,4 @@ class SessionState:
         self._last_brew_at  = None
         self._brew_start    = None
         self._pending_token = None
+        self._summary_shown_at = None

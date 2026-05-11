@@ -4,7 +4,7 @@ from unittest.mock import patch, MagicMock
 import core.db as db
 from core.state import SessionState, State
 from core.events import QRScanned, BrewStart, BrewEnd
-from config import ARMED_TIMEOUT, SESSION_TIMEOUT, MIN_BREW_DURATION
+from config import ARMED_TIMEOUT, SESSION_TIMEOUT, SUMMARY_DURATION, MIN_BREW_DURATION
 
 
 @pytest.fixture
@@ -78,14 +78,21 @@ def test_armed_inactivity_timeout_after_brew_shows_summary(state, mock_display):
     state.handle(BrewStart())
     state.handle(brew_end(25.0))
     assert state.state == State.ARMED
+
     # Backdate last brew to trigger inactivity timeout
     state._last_brew_at = time.time() - (SESSION_TIMEOUT + 1)
-    with patch("core.state.time") as mock_time:
-        mock_time.time.return_value = time.time()
-        mock_time.sleep = MagicMock()
-        state.on_tick()
-    assert state.state == State.IDLE
+
+    # First tick: shows summary, sets _summary_shown_at
+    state.on_tick()
+    assert state.state == State.ARMED  # still ARMED, waiting for SUMMARY_DURATION
     mock_display.show_summary.assert_called_once()
+
+    # Backdate summary_shown_at to simulate time passing
+    state._summary_shown_at = time.time() - (SUMMARY_DURATION + 1)
+
+    # Second tick: transitions to IDLE
+    state.on_tick()
+    assert state.state == State.IDLE
     mock_display.show_idle.assert_called()
 
 
