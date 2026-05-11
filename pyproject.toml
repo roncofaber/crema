@@ -8,6 +8,9 @@ dependencies = [
     "adafruit-circuitpython-rgb-display",
     "Pillow",
     "click",
+    "fastapi",
+    "uvicorn[standard]",
+    "httpx",
 ]
 
 [project.scripts]
@@ -15,4 +18,4 @@ crema = "cli.main:cli"
 
 [tool.setuptools]
 py-modules = ["config", "main"]
-packages   = ["core", "hardware", "cli"]
+packages   = ["core", "hardware", "cli", "api", "api.routers"]
