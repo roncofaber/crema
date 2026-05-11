@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react"
 import { api } from "../api"
+import { usePolling } from "../hooks/usePolling"
 import type { User } from "../types"
 
 function fmt(seconds: number): string {
@@ -14,8 +14,7 @@ function fmtDate(ts: number | null): string {
 }
 
 export function Leaderboard() {
-  const [users, setUsers] = useState<User[]>([])
-  useEffect(() => { api.users().then(setUsers).catch(() => {}) }, [])
+  const { data: users } = usePolling(api.users, 30_000)
 
   return (
     <div className="bg-gray-800 rounded-lg overflow-hidden">
@@ -30,7 +29,7 @@ export function Leaderboard() {
           </tr>
         </thead>
         <tbody>
-          {users.map((u, i) => (
+          {(users ?? []).map((u, i) => (
             <tr key={u.id} className="border-b border-gray-700 last:border-0 hover:bg-gray-750">
               <td className="px-4 py-3 text-gray-500">{i + 1}</td>
               <td className="px-4 py-3 font-medium">{u.name}</td>

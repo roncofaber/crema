@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react"
 import { api } from "../api"
+import { usePolling } from "../hooks/usePolling"
 import type { OverallStats } from "../types"
 
 function fmt(seconds: number): string {
@@ -9,8 +9,7 @@ function fmt(seconds: number): string {
 }
 
 export function StatsCards() {
-  const [stats, setStats] = useState<OverallStats | null>(null)
-  useEffect(() => { api.stats().then(setStats).catch(() => {}) }, [])
+  const { data: stats } = usePolling(api.stats, 30_000)
 
   if (!stats) return null
 

@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react"
 import { api } from "../api"
+import { usePolling } from "../hooks/usePolling"
 import type { Brew } from "../types"
 
 function fmtTime(ts: number): string {
@@ -13,8 +13,7 @@ function fmtDuration(s: number): string {
 }
 
 export function RecentBrews() {
-  const [brews, setBrews] = useState<Brew[]>([])
-  useEffect(() => { api.brews(20).then(setBrews).catch(() => {}) }, [])
+  const { data: brews } = usePolling(api.brews, 15_000)
 
   return (
     <div className="bg-gray-800 rounded-lg overflow-hidden">
@@ -28,7 +27,7 @@ export function RecentBrews() {
           </tr>
         </thead>
         <tbody>
-          {brews.map(b => (
+          {(brews ?? []).map(b => (
             <tr key={b.id} className="border-b border-gray-700 last:border-0">
               <td className="px-4 py-3">{b.user}</td>
               <td className="px-4 py-3 text-gray-400">{fmtTime(b.started_at)}</td>
