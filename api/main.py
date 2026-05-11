@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api.routers import users, brews
+from api.routers import users, brews, stats
 
 app = FastAPI(title="CREMA API")
 
@@ -13,6 +13,7 @@ app.add_middleware(
 
 app.include_router(users.router, prefix="/users", tags=["users"])
 app.include_router(brews.router, prefix="/brews", tags=["brews"])
+app.include_router(stats.router, prefix="/stats", tags=["stats"])
 
 
 @app.get("/")

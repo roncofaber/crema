@@ -112,3 +112,38 @@ def test_list_brews_filter_kind(client):
     assert resp.status_code == 200
     assert len(resp.json()) == 1
     assert resp.json()[0]["kind"] == "noise"
+
+
+def test_overall_stats_empty(client):
+    resp = client.get("/stats/")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total_brews"] == 0
+    assert data["total_users"] == 0
+    assert data["top_brewer"] is None
+
+
+def test_overall_stats(client):
+    alice = db_module.get_or_create_user("alice@example.com")
+    sid = db_module.start_session(alice["id"])
+    now = time_mod.time()
+    db_module.log_brew(sid, now - 30, now, "brew")
+    db_module.log_brew(sid, now - 5,  now, "noise")
+    resp = client.get("/stats/")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total_brews"] == 1
+    assert data["total_users"] == 1
+    assert data["top_brewer"] == "alice"
+
+
+def test_daily_stats(client):
+    alice = db_module.get_or_create_user("alice@example.com")
+    sid = db_module.start_session(alice["id"])
+    now = time_mod.time()
+    db_module.log_brew(sid, now - 30, now, "brew")
+    resp = client.get("/stats/daily")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data) == 1
+    assert data[0]["brews"] == 1
