@@ -23,7 +23,7 @@ function useElapsed(startTs: number | null): string {
 }
 
 export default function App() {
-  if (window.location.pathname.startsWith('/kiosk')) {
+  if (window.location.pathname.replace(/^\/ui/, '').startsWith('/kiosk')) {
     return <KioskApp />
   }
 
