@@ -22,7 +22,7 @@ export function Brewing({ snapshot }: Props) {
     <div className="h-screen bg-bg flex flex-col">
       <div className="h-1 bg-crema-400 flex-shrink-0" />
       <div className="flex-1 flex flex-col items-center justify-center gap-3 px-8">
-        <p className="font-plex text-xs uppercase tracking-[0.18em] text-faint">{user}</p>
+        <p className="font-plex text-sm uppercase tracking-[0.18em] text-faint">{user}</p>
         <p className="font-display text-8xl text-ink leading-none">×{brew_count + 1}</p>
         <p className="font-plex text-2xl text-crema-400 tracking-wide">{fmt(elapsed)}</p>
         <div className="w-2/3 h-1.5 bg-border-subtle rounded-full overflow-hidden mt-2">
@@ -32,12 +32,12 @@ export function Brewing({ snapshot }: Props) {
         <div className="flex gap-3 mt-3">
           {(['single', 'double'] as const).map(v => (
             <button key={v} onClick={() => setShot(v)}
-              className={`px-4 py-2 rounded text-xs font-plex tracking-widest uppercase ${shot_type === v ? 'bg-crema-500 text-surface' : 'bg-surface text-faint border border-border'}`}>
+              className={`px-5 py-3 rounded text-sm font-plex tracking-widest uppercase ${shot_type === v ? 'bg-crema-500 text-surface' : 'bg-surface text-faint border border-border'}`}>
               {v}
             </button>
           ))}
           <button onClick={() => setDecaf(!decaf)}
-            className={`px-4 py-2 rounded text-xs font-plex tracking-widest uppercase ${decaf ? 'bg-crema-500 text-surface' : 'bg-surface text-faint border border-border'}`}>
+            className={`px-5 py-3 rounded text-sm font-plex tracking-widest uppercase ${decaf ? 'bg-crema-500 text-surface' : 'bg-surface text-faint border border-border'}`}>
             {decaf ? 'Decaf' : 'Origin'}
           </button>
         </div>

@@ -18,7 +18,7 @@ export function AnonBrewing({ snapshot }: Props) {
     <div className="h-screen bg-bg flex flex-col">
       <div className="h-1 bg-border flex-shrink-0" />
       <div className="flex-1 flex flex-col items-center justify-center gap-3">
-        <p className="font-plex text-xs uppercase tracking-[0.18em] text-faint">Anonymous</p>
+        <p className="font-plex text-sm uppercase tracking-[0.18em] text-faint">Anonymous</p>
         <p className="font-display text-8xl text-ink leading-none">×1</p>
         <p className="font-plex text-2xl text-crema-400 tracking-wide">{fmt(elapsed)}</p>
         <div className="w-2/3 h-1.5 bg-border-subtle rounded-full overflow-hidden mt-2">

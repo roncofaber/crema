@@ -29,21 +29,21 @@ export function RatingPrompt({ snapshot, onDismiss }: Props) {
   return (
     <div className="absolute inset-0 bg-bg flex flex-col items-center justify-center gap-4 z-50">
       <div className="h-1 w-full bg-crema-500 absolute top-0" />
-      <p className="font-plex text-[10px] uppercase tracking-[0.22em] text-faint">Brew complete</p>
-      <h2 className="font-display italic text-4xl text-ink">How was that one?</h2>
-      <p className="font-plex text-xs text-faint tracking-wide">
+      <p className="font-plex text-xs uppercase tracking-[0.22em] text-faint">Brew complete</p>
+      <h2 className="font-display italic text-5xl text-ink">How was that one?</h2>
+      <p className="font-plex text-sm text-faint tracking-wide">
         {shot_type} {decaf ? '· decaf' : ''}
       </p>
-      <div className="flex gap-4 my-2">
+      <div className="flex gap-5 my-2">
         {[1, 2, 3, 4, 5].map(n => (
           <button key={n} onClick={() => rate(n)}
-            className="text-5xl leading-none text-crema-400 hover:text-crema-300 transition-colors">
+            className="text-6xl leading-none text-crema-400 hover:text-crema-300 transition-colors">
             ★
           </button>
         ))}
       </div>
       <button onClick={onDismiss}
-        className="font-plex text-xs text-faint uppercase tracking-widest border-b border-border pb-px">
+        className="font-plex text-sm text-faint uppercase tracking-widest border-b border-border pb-px">
         Skip · auto-dismiss in {countdown}s
       </button>
       <div className="h-1 w-full bg-crema-500 absolute bottom-0" />
