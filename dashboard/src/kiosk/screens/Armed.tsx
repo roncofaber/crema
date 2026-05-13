@@ -43,8 +43,8 @@ export function Armed({ snapshot }: Props) {
       <div className="h-1 bg-crema-500 flex-shrink-0" />
       <div className="flex-1 flex min-h-0">
         {/* Left: user info */}
-        <div className="flex-1 flex flex-col justify-center px-10 border-r border-border-subtle">
-          <p className="text-sm uppercase tracking-[0.2em] text-faint mb-1">Ciao,</p>
+        <div className="flex-[2] flex flex-col justify-center px-10 border-r border-border-subtle">
+          <p className="text-base uppercase tracking-[0.2em] text-faint mb-1">Ciao,</p>
           <h1 className="font-display italic text-6xl text-ink mb-3 truncate">{user}</h1>
           <p className="text-base text-muted">
             {brew_count === 0
@@ -53,7 +53,7 @@ export function Armed({ snapshot }: Props) {
           </p>
         </div>
         {/* Right: controls */}
-        <div className="flex-1 flex flex-col justify-center gap-5 px-10">
+        <div className="flex-[3] flex flex-col justify-center gap-5 px-10">
           <ToggleRow
             label="Shot type"
             options={[['single', 'Single'], ['double', 'Double']]}
