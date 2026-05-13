@@ -1,5 +1,5 @@
 [Unit]
-Description=CREMA Kiosk
+Description=CREMA Kiosk (hardware + API)
 After=network.target
 Wants=network.target
 

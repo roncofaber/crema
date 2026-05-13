@@ -17,5 +17,5 @@ npm run build
 cd "$REPO_DIR"
 pip install -e . --quiet
 
-sudo systemctl restart crema-kiosk crema-api
-sudo systemctl status crema-kiosk crema-api --no-pager
+sudo systemctl restart crema-kiosk crema-browser
+sudo systemctl status crema-kiosk crema-browser --no-pager

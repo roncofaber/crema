@@ -1,3 +1,6 @@
+# RETIRED: The API now runs inside crema-kiosk.service (merged process).
+# This file is kept for reference only. Do not enable this service.
+
 [Unit]
 Description=CREMA API
 After=network.target

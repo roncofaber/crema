@@ -1,0 +1,26 @@
+[Unit]
+Description=CREMA Browser (kiosk display)
+After=crema-kiosk.service graphical.target
+Wants=crema-kiosk.service
+
+[Service]
+Type=simple
+User=roncofaber
+Environment=DISPLAY=:0
+ExecStartPre=/bin/sleep 5
+ExecStart=/usr/bin/chromium-browser \
+  --kiosk \
+  --noerrdialogs \
+  --disable-infobars \
+  --touch-events=enabled \
+  --no-first-run \
+  --disable-session-crashed-bubble \
+  --disable-restore-session-state \
+  http://localhost:8000/kiosk
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=graphical.target
