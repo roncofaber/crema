@@ -2,6 +2,7 @@ import asyncio
 import os
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from api.auth import verify_token
 from api.routers import users, brews, stats, status, kiosk as kiosk_router
@@ -36,4 +37,8 @@ def root():
 
 _DIST = os.path.join(os.path.dirname(__file__), "..", "dashboard", "dist")
 if os.path.isdir(_DIST):
+    @app.get("/kiosk", include_in_schema=False)
+    def serve_kiosk():
+        return FileResponse(os.path.join(_DIST, "index.html"))
+
     app.mount("/ui", StaticFiles(directory=_DIST, html=True), name="dashboard")
