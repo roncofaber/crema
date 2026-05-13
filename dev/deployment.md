@@ -35,8 +35,8 @@ cd ~/crema
 ```
 
 The script:
-1. Creates `~/crema/venv` and installs Python deps (`pip install -e .`)
-2. Builds the React dashboard (`npm ci && npm run build` in `dashboard/`)
+1. Creates `~/crema/venv` (if absent) and installs Python deps (`pip install -e .`)
+2. Builds the React dashboard (`npm install && npm run build` in `dashboard/`)
 3. Copies service files to `/etc/systemd/system/`
 4. Enables and starts `crema-kiosk` and `crema-browser`
 
