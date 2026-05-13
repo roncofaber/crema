@@ -54,7 +54,7 @@ async def broadcast_loop():
                 await ws.send_json(snapshot)
             except Exception:
                 dead.add(ws)
-        _ws_clients -= dead
+        _ws_clients.difference_update(dead)
 
 
 def start():
