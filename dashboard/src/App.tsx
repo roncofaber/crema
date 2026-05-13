@@ -4,6 +4,7 @@ import { StatsCards }   from "./components/StatsCards"
 import { Leaderboard }  from "./components/Leaderboard"
 import { DailyChart }   from "./components/DailyChart"
 import { RecentBrews }  from "./components/RecentBrews"
+import { KioskApp }    from "./kiosk/KioskApp"
 import { api } from "./api"
 import { usePolling } from "./hooks/usePolling"
 
@@ -22,6 +23,10 @@ function useElapsed(startTs: number | null): string {
 }
 
 export default function App() {
+  if (window.location.pathname.startsWith('/kiosk')) {
+    return <KioskApp />
+  }
+
   const { data: status } = usePolling(api.status, 5000)
   const elapsed = useElapsed(status?.session_started_at ?? null)
   const brewing = status?.state === "brewing"

@@ -17,4 +17,16 @@ export const api = {
   users:      ()           => get<User[]>("/users/"),
   brews:      (limit = 20, kind: string | null = "brew") =>
     get<Brew[]>(`/brews/?limit=${limit}${kind ? `&kind=${kind}` : ""}`),
+  kioskLogout: () => {
+    const headers: HeadersInit = TOKEN ? { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' }
+    return fetch(`${BASE}/kiosk/logout`, { method: 'POST', headers })
+  },
+  kioskBrewOptions: (opts: { shot_type: string; decaf: boolean }) => {
+    const headers: HeadersInit = TOKEN ? { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' }
+    return fetch(`${BASE}/kiosk/brew-options`, { method: 'POST', headers, body: JSON.stringify(opts) })
+  },
+  kioskRate: (brew_id: number, rating: number) => {
+    const headers: HeadersInit = TOKEN ? { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' }
+    return fetch(`${BASE}/kiosk/rate`, { method: 'POST', headers, body: JSON.stringify({ brew_id, rating }) })
+  },
 }
