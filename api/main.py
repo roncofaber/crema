@@ -1,11 +1,17 @@
+import asyncio
 import os
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from api.auth import verify_token
 from api.routers import users, brews, stats, status
+import core.kiosk as kiosk
 
 app = FastAPI(title="CREMA API")
+
+@app.on_event("startup")
+async def _start_kiosk_broadcaster():
+    asyncio.create_task(kiosk.broadcast_loop())
 
 app.add_middleware(
     CORSMiddleware,
