@@ -38,11 +38,11 @@ class VibrationSensor:
         import board
         import busio
         import digitalio
-        import adafruit_adxl34x
+        from hardware.adxl345 import ADXL345SPI
 
         spi = busio.SPI(board.SCLK, MOSI=board.MOSI, MISO=board.MISO)
         cs = digitalio.DigitalInOut(board.CE1)
-        self._accel = adafruit_adxl34x.ADXL345(spi, cs)
+        self._accel = ADXL345SPI(spi, cs)
         self._thread.start()
 
     def stop(self):
