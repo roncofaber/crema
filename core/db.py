@@ -34,6 +34,19 @@ def init_db():
                 kind        TEXT NOT NULL       -- 'brew' or 'noise'
             );
         """)
+        # Add new columns for per-brew annotations and ratings (SQLite 3.35+)
+        try:
+            con.execute("ALTER TABLE brews ADD COLUMN shot_type TEXT")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+        try:
+            con.execute("ALTER TABLE brews ADD COLUMN decaf INTEGER")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+        try:
+            con.execute("ALTER TABLE brews ADD COLUMN rating INTEGER")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
         # Close any sessions left open by a previous unclean shutdown.
         con.execute(
             "UPDATE sessions SET ended_at=? WHERE ended_at IS NULL",
@@ -73,12 +86,14 @@ def end_session(session_id: int):
         )
 
 
-def log_brew(session_id: int | None, started_at: float, ended_at: float, kind: str):
+def log_brew(session_id: int | None, started_at: float, ended_at: float, kind: str, shot_type: str | None = None, decaf: int | None = None) -> int:
+    """Log a brew and return its id."""
     with get_connection() as con:
-        con.execute(
-            "INSERT INTO brews (session_id, started_at, ended_at, duration, kind) VALUES (?,?,?,?,?)",
-            (session_id, started_at, ended_at, ended_at - started_at, kind),
+        cur = con.execute(
+            "INSERT INTO brews (session_id, started_at, ended_at, duration, kind, shot_type, decaf) VALUES (?,?,?,?,?,?,?)",
+            (session_id, started_at, ended_at, ended_at - started_at, kind, shot_type, decaf),
         )
+        return cur.lastrowid
 
 
 def get_user_stats(user_id: int) -> dict:
@@ -91,3 +106,19 @@ def get_user_stats(user_id: int) -> dict:
             WHERE s.user_id = ? AND b.kind = 'brew'
         """, (user_id,)).fetchone()
     return {"total_brews": row[0], "total_time": row[1]}
+
+
+def rate_brew(brew_id: int, rating: int):
+    """Set rating (1–5) on a completed brew."""
+    with get_connection() as con:
+        con.execute("UPDATE brews SET rating=? WHERE id=?", (rating, brew_id))
+
+
+def get_session_avg_rating(session_id: int) -> float | None:
+    """Average rating of rated brews in a session. None if none rated."""
+    with get_connection() as con:
+        row = con.execute(
+            "SELECT AVG(rating) FROM brews WHERE session_id=? AND rating IS NOT NULL",
+            (session_id,)
+        ).fetchone()
+    return row[0]  # None if no rated brews

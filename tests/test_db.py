@@ -65,7 +65,8 @@ def test_log_brew_creates_row(test_db):
     user = db.get_or_create_user("eve@example.com")
     session_id = db.start_session(user["id"])
     t = time.time()
-    db.log_brew(session_id, t, t + 25.0, "brew")
+    brew_id = db.log_brew(session_id, t, t + 25.0, "brew")
+    assert isinstance(brew_id, int)
     with db.get_connection() as con:
         row = con.execute(
             "SELECT duration, kind FROM brews WHERE session_id=?", (session_id,)
@@ -76,7 +77,8 @@ def test_log_brew_creates_row(test_db):
 
 def test_log_brew_anonymous(test_db):
     t = time.time()
-    db.log_brew(None, t, t + 5.0, "noise")
+    brew_id = db.log_brew(None, t, t + 5.0, "noise")
+    assert isinstance(brew_id, int)
     with db.get_connection() as con:
         row = con.execute(
             "SELECT session_id, kind FROM brews WHERE session_id IS NULL"
@@ -96,3 +98,52 @@ def test_get_user_stats_counts_brews_only(test_db):
     stats = db.get_user_stats(user["id"])
     assert stats["total_brews"] == 2
     assert stats["total_time"] == pytest.approx(50.0)
+
+
+def test_log_brew_with_shot_type_and_decaf(test_db):
+    user = db.get_or_create_user("grace@example.com")
+    session_id = db.start_session(user["id"])
+    t = time.time()
+    brew_id = db.log_brew(session_id, t, t + 25.0, "brew", shot_type="double", decaf=1)
+    assert isinstance(brew_id, int)
+    with db.get_connection() as con:
+        row = con.execute(
+            "SELECT shot_type, decaf FROM brews WHERE id=?", (brew_id,)
+        ).fetchone()
+    assert row[0] == "double"
+    assert row[1] == 1
+
+
+def test_rate_brew(test_db):
+    user = db.get_or_create_user("henry@example.com")
+    session_id = db.start_session(user["id"])
+    t = time.time()
+    brew_id = db.log_brew(session_id, t, t + 25.0, "brew")
+    db.rate_brew(brew_id, 4)
+    with db.get_connection() as con:
+        row = con.execute(
+            "SELECT rating FROM brews WHERE id=?", (brew_id,)
+        ).fetchone()
+    assert row[0] == 4
+
+
+def test_get_session_avg_rating_no_ratings(test_db):
+    user = db.get_or_create_user("iris@example.com")
+    session_id = db.start_session(user["id"])
+    t = time.time()
+    db.log_brew(session_id, t, t + 25.0, "brew")
+    db.log_brew(session_id, t + 30.0, t + 55.0, "brew")
+    avg = db.get_session_avg_rating(session_id)
+    assert avg is None
+
+
+def test_get_session_avg_rating(test_db):
+    user = db.get_or_create_user("jack@example.com")
+    session_id = db.start_session(user["id"])
+    t = time.time()
+    brew_id_1 = db.log_brew(session_id, t, t + 25.0, "brew")
+    brew_id_2 = db.log_brew(session_id, t + 30.0, t + 55.0, "brew")
+    db.rate_brew(brew_id_1, 3)
+    db.rate_brew(brew_id_2, 5)
+    avg = db.get_session_avg_rating(session_id)
+    assert avg == pytest.approx(4.0)
