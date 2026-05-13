@@ -226,3 +226,53 @@ def test_auth_invalid_token(client, monkeypatch):
     monkeypatch.setattr("api.auth._TOKEN", "secret")
     resp = client.get("/users/", headers={"Authorization": "Bearer wrong"})
     assert resp.status_code == 401
+
+
+# ── Kiosk endpoints ───────────────────────────────────────────────────────────
+
+from unittest.mock import MagicMock, patch
+
+
+def test_kiosk_logout_no_state(client):
+    """Returns 503 when kiosk hardware is not running."""
+    with patch("api.routers.kiosk.kiosk.get_state", return_value=None):
+        resp = client.post("/kiosk/logout")
+    assert resp.status_code == 503
+
+
+def test_kiosk_logout_calls_force_logout(client):
+    mock_state = MagicMock()
+    with patch("api.routers.kiosk.kiosk.get_state", return_value=mock_state):
+        resp = client.post("/kiosk/logout")
+    assert resp.status_code == 200
+    mock_state.force_logout.assert_called_once()
+
+
+def test_kiosk_brew_options(client):
+    mock_state = MagicMock()
+    with patch("api.routers.kiosk.kiosk.get_state", return_value=mock_state):
+        resp = client.post("/kiosk/brew-options", json={"shot_type": "single", "decaf": True})
+    assert resp.status_code == 200
+    mock_state.set_brew_options.assert_called_once_with("single", True)
+
+
+def test_kiosk_rate_valid(client):
+    user = db_module.get_or_create_user("rater@example.com")
+    sid = db_module.start_session(user["id"])
+    now = time_mod.time()
+    brew_id = db_module.log_brew(sid, now - 30, now, "brew")
+    resp = client.post("/kiosk/rate", json={"brew_id": brew_id, "rating": 4})
+    assert resp.status_code == 200
+    with db_module.get_connection() as con:
+        row = con.execute("SELECT rating FROM brews WHERE id=?", (brew_id,)).fetchone()
+    assert row[0] == 4
+
+
+def test_kiosk_rate_invalid_range(client):
+    resp = client.post("/kiosk/rate", json={"brew_id": 1, "rating": 6})
+    assert resp.status_code == 422
+
+
+def test_kiosk_rate_invalid_range_zero(client):
+    resp = client.post("/kiosk/rate", json={"brew_id": 1, "rating": 0})
+    assert resp.status_code == 422
