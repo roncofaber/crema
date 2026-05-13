@@ -17,6 +17,15 @@ Two systemd units:
 
 > `crema-api.service` (legacy) is retired. Do not enable it.
 
+## Uninstall / fresh start
+
+```bash
+bash deploy/uninstall.sh   # stops, disables, and removes all service files
+bash deploy/install.sh     # re-install from scratch
+```
+
+`uninstall.sh` also removes the legacy `crema-api` service if present.
+
 ## First-time install
 
 ```bash
