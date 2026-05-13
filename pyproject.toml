@@ -3,9 +3,9 @@ name = "crema"
 version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
-    "RPi.GPIO",
     "evdev",
     "adafruit-circuitpython-rgb-display",
+    "adafruit-circuitpython-adxl34x",
     "Pillow",
     "click",
     "fastapi",

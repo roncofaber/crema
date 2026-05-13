@@ -1,12 +1,13 @@
-# GPIO pins
-VIBRATION_PIN = 17          # SW-420 signal pin
+# ADXL345 accelerometer
+ADXL_BREW_THRESHOLD = 11.5   # m/s² magnitude — tune with `crema sensor`
+ADXL_SAMPLE_RATE    = 50     # Hz polling rate
+ADXL_RANGE          = 4      # ±4g range setting
 
 # Vibration thresholds
 MIN_BREW_DURATION    = 10   # seconds — below this → kind='noise'
 BREW_END_SILENCE     = 10   # seconds of silence before BrewEnd fires
 MIN_VIBRATION_PULSE  = 0.5  # seconds — minimum HIGH pulse to reset silence timer
 BREW_CONFIRM_WINDOW  = 2    # seconds of sustained vibration before BrewStart fires
-SENSOR_POLL_INTERVAL = 0.01 # seconds between GPIO reads (10 ms)
 
 # Session timeouts
 ARMED_TIMEOUT   = 120   # seconds waiting for machine after scan (no brew yet)

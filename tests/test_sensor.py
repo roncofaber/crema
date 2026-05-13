@@ -1,64 +1,47 @@
 import sys
-import time
 import queue
 from unittest.mock import patch, MagicMock
 
-# Mock RPi.GPIO before hardware.sensor is imported (not available on non-Pi)
-_gpio_mock = MagicMock()
-_gpio_mock.HIGH = 1
-_gpio_mock.LOW  = 0
-sys.modules.setdefault("RPi",     MagicMock())
-sys.modules.setdefault("RPi.GPIO", _gpio_mock)
+# Mock all hardware modules before hardware.sensor is imported (not available on non-Pi)
+for mod in ["board", "busio", "digitalio", "adafruit_adxl34x"]:
+    sys.modules.setdefault(mod, MagicMock())
 
 from core.events import BrewStart, BrewEnd  # noqa: E402
+from config import ADXL_BREW_THRESHOLD      # noqa: E402
+
+POLL = 0.02  # seconds per step in tests
+HIGH = ADXL_BREW_THRESHOLD + 1.0   # clearly above threshold
+LOW = 0.0                           # clearly below
 
 
-def run_sensor_loop(gpio_sequence, poll_interval=0.01):
+def run_steps(magnitude_sequence):
     """
-    Runs the sensor _step loop against a fake GPIO sequence.
-    gpio_sequence: list of (value, duration_seconds) tuples.
+    Runs the sensor _step loop against a sequence of magnitude values.
+    magnitude_sequence: list of (magnitude_value, duration_seconds) tuples
     Returns the list of events posted to the queue.
     """
     q = queue.Queue()
     readings = []
-    for value, duration in gpio_sequence:
-        count = max(1, int(duration / poll_interval))
-        readings.extend([value] * count)
+    for mag, dur in magnitude_sequence:
+        readings.extend([mag] * max(1, int(dur / POLL)))
 
-    call_count = [0]
+    t = [0.0]
 
-    def fake_input(pin):
-        idx = call_count[0]
-        call_count[0] += 1
-        if idx < len(readings):
-            return readings[idx]
-        return 0  # LOW after sequence ends
+    def fake_time():
+        val = t[0]
+        t[0] += POLL
+        return val
 
-    with patch("hardware.sensor.GPIO") as mock_gpio, \
-         patch("hardware.sensor.time") as mock_time:
-
-        mock_gpio.HIGH = 1
-        mock_gpio.LOW  = 0
-        mock_gpio.BCM  = 11
-        mock_gpio.PUD_DOWN = 21
-        mock_gpio.IN   = 1
-        mock_gpio.input.side_effect = fake_input
+    with patch("hardware.sensor.time") as mock_time:
         mock_time.sleep = MagicMock()
-
-        # Replace time.time with a counter advancing by poll_interval per call
-        t = [0.0]
-        def fake_time():
-            val = t[0]
-            t[0] += poll_interval
-            return val
         mock_time.time.side_effect = fake_time
 
         from hardware.sensor import VibrationSensor
         s = VibrationSensor(q)
 
-        # Run enough iterations to process the whole sequence
-        for _ in range(len(readings) + 1500):  # extra for silence window
-            s._step()
+        # Run enough iterations to process the whole sequence plus silence window
+        for mag in readings + [LOW] * 1000:
+            s._step(magnitude=mag)
 
     events = []
     while not q.empty():
@@ -68,7 +51,7 @@ def run_sensor_loop(gpio_sequence, poll_interval=0.01):
 
 def test_long_vibration_posts_brew_start_then_end():
     # 30 seconds HIGH (> BREW_CONFIRM_WINDOW=2s), then 15s LOW (> BREW_END_SILENCE=10s)
-    events = run_sensor_loop([(1, 30), (0, 15)])
+    events = run_steps([(HIGH, 30), (LOW, 15)])
     types = [type(e).__name__ for e in events]
     assert "BrewStart" in types
     assert "BrewEnd" in types
@@ -78,13 +61,13 @@ def test_long_vibration_posts_brew_start_then_end():
 
 def test_short_spike_does_not_post_brew_start():
     # 0.2s HIGH (< MIN_VIBRATION_PULSE=0.5s), then 15s LOW
-    events = run_sensor_loop([(1, 0.2), (0, 15)])
+    events = run_steps([(HIGH, 0.2), (LOW, 15)])
     assert not any(isinstance(e, BrewStart) for e in events)
 
 
 def test_cleanup_vibration_below_confirm_window():
     # 1s HIGH (> MIN_VIBRATION_PULSE but < BREW_CONFIRM_WINDOW=2s), then 15s LOW
-    events = run_sensor_loop([(1, 1.0), (0, 15)])
+    events = run_steps([(HIGH, 1.0), (LOW, 15)])
     assert not any(isinstance(e, BrewStart) for e in events)
     # BrewEnd still fires (cleanup logged as noise by state machine)
     assert any(isinstance(e, BrewEnd) for e in events)
@@ -92,7 +75,7 @@ def test_cleanup_vibration_below_confirm_window():
 
 def test_brief_silence_does_not_end_brew():
     # 5s HIGH, 2s LOW (< BREW_END_SILENCE=10s), 5s HIGH, 15s LOW
-    events = run_sensor_loop([(1, 5), (0, 2), (1, 5), (0, 15)])
+    events = run_steps([(HIGH, 5), (LOW, 2), (HIGH, 5), (LOW, 15)])
     brew_ends = [e for e in events if isinstance(e, BrewEnd)]
     assert len(brew_ends) == 1  # only one brew end
 
@@ -100,6 +83,6 @@ def test_brief_silence_does_not_end_brew():
 def test_post_brew_spike_does_not_reset_timer():
     # 30s HIGH, 0.3s LOW, 0.3s HIGH spike, 15s LOW
     # The 0.3s spike is < MIN_VIBRATION_PULSE, so silence timer shouldn't reset
-    events = run_sensor_loop([(1, 30), (0, 0.3), (1, 0.3), (0, 15)])
+    events = run_steps([(HIGH, 30), (LOW, 0.3), (HIGH, 0.3), (LOW, 15)])
     brew_ends = [e for e in events if isinstance(e, BrewEnd)]
     assert len(brew_ends) == 1
