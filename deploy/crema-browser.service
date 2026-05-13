@@ -8,6 +8,7 @@ Type=simple
 User=roncofaber
 Environment=DISPLAY=:0
 ExecStartPre=/bin/sleep 5
+ExecStartPre=/bin/bash -c 'pkill -x chromium || true'
 ExecStart=/usr/bin/chromium \
   --kiosk \
   --noerrdialogs \
