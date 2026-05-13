@@ -8,7 +8,7 @@ Type=simple
 User=roncofaber
 Environment=DISPLAY=:0
 ExecStartPre=/bin/sleep 5
-ExecStart=/usr/bin/chromium-browser \
+ExecStart=/usr/bin/chromium \
   --kiosk \
   --noerrdialogs \
   --disable-infobars \
