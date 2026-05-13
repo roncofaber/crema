@@ -45,14 +45,18 @@ class QRScanner:
         return None
 
     def _run(self):
-        path = self._device_path or self._find_device_path()
-        if path:
-            log.info("scanner opened: %s", path)
-            self._device_path = path
-            self._run_evdev()
-        else:
-            log.warning("scanner not found, falling back to stdin")
-            self._run_stdin()
+        import time
+        while True:
+            path = self._device_path or self._find_device_path()
+            if path:
+                log.info("scanner opened: %s", path)
+                self._device_path = path
+                self._run_evdev()
+                log.warning("scanner disconnected, retrying in 5 s...")
+                self._device_path = None
+            else:
+                log.debug("scanner not found, retrying in 5 s...")
+            time.sleep(5)
 
     def _run_stdin(self):
         while True:
