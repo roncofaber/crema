@@ -1,6 +1,5 @@
 import time
 import pytest
-from unittest.mock import patch, MagicMock
 import core.db as db
 from core.state import SessionState, State
 from core.events import QRScanned, BrewStart, BrewEnd
@@ -8,8 +7,19 @@ from config import ARMED_TIMEOUT, SESSION_TIMEOUT, SUMMARY_DURATION, MIN_BREW_DU
 
 
 @pytest.fixture
-def state(test_db, mock_display):
-    return SessionState(mock_display)
+def state(test_db):
+    return SessionState()
+
+
+@pytest.fixture
+def captured_broadcasts():
+    snapshots = []
+    return snapshots
+
+
+@pytest.fixture
+def state_with_broadcast(test_db, captured_broadcasts):
+    return SessionState(on_broadcast=lambda s: captured_broadcasts.append(s))
 
 
 def brew_end(duration=25.0):
@@ -24,16 +34,14 @@ def short_brew_end(duration=3.0):
 
 # -- IDLE transitions --
 
-def test_idle_valid_qr_transitions_to_armed(state, mock_display):
+def test_idle_valid_qr_transitions_to_armed(state):
     state.handle(QRScanned(token="alice@example.com"))
     assert state.state == State.ARMED
-    mock_display.show_armed.assert_called_once_with("alice", 0)
 
 
-def test_idle_brew_start_transitions_to_anon(state, mock_display):
+def test_idle_brew_start_transitions_to_anon(state):
     state.handle(BrewStart())
     assert state.state == State.ANON_BREW
-    mock_display.show_anon_brewing.assert_called_once_with(0)
 
 
 def test_idle_brew_end_ignored(state):
@@ -43,57 +51,46 @@ def test_idle_brew_end_ignored(state):
 
 # -- ARMED transitions --
 
-def test_armed_brew_start_transitions_to_brewing(state, mock_display):
+def test_armed_brew_start_transitions_to_brewing(state):
     state.handle(QRScanned(token="bob@example.com"))
     state.handle(BrewStart())
     assert state.state == State.BREWING
-    mock_display.show_brewing.assert_called_with("bob", 0, pytest.approx(0, abs=1))
 
 
-def test_armed_same_user_scan_is_ignored(state, mock_display):
+def test_armed_same_user_scan_is_ignored(state):
     state.handle(QRScanned(token="carol@example.com"))
     state.handle(QRScanned(token="carol@example.com"))
     assert state.state == State.ARMED
     assert state._user["name"] == "carol"
 
 
-def test_armed_different_user_scan_swaps_session(state, mock_display):
+def test_armed_different_user_scan_swaps_session(state):
     state.handle(QRScanned(token="dave@example.com"))
     state.handle(QRScanned(token="eve@example.com"))
     assert state.state == State.ARMED
     assert state._user["name"] == "eve"
-    mock_display.show_armed.assert_called_with("eve", 0)
 
 
-def test_armed_timeout_no_brew_returns_to_idle(state, mock_display):
+def test_armed_timeout_no_brew_returns_to_idle(state):
     state.handle(QRScanned(token="frank@example.com"))
     state._state_since = time.time() - (ARMED_TIMEOUT + 1)
     state.on_tick()
     assert state.state == State.IDLE
-    mock_display.show_idle.assert_called()
 
 
-def test_armed_inactivity_timeout_after_brew_shows_summary(state, mock_display):
+def test_inactivity_timeout_transitions_to_summary(state):
     state.handle(QRScanned(token="grace@example.com"))
     state.handle(BrewStart())
     state.handle(brew_end(25.0))
     assert state.state == State.ARMED
 
-    # Backdate last brew to trigger inactivity timeout
     state._last_brew_at = time.time() - (SESSION_TIMEOUT + 1)
-
-    # First tick: shows summary, sets _summary_shown_at
     state.on_tick()
-    assert state.state == State.ARMED  # still ARMED, waiting for SUMMARY_DURATION
-    mock_display.show_summary.assert_called_once()
+    assert state.state == State.SUMMARY
 
-    # Backdate summary_shown_at to simulate time passing
     state._summary_shown_at = time.time() - (SUMMARY_DURATION + 1)
-
-    # Second tick: transitions to IDLE
     state.on_tick()
     assert state.state == State.IDLE
-    mock_display.show_idle.assert_called()
 
 
 # -- BREWING transitions --
@@ -119,7 +116,7 @@ def test_brewing_brew_end_below_threshold_logs_noise(state, test_db):
     assert row[0] == "noise"
 
 
-def test_brewing_qr_scan_pending_applied_after_brew(state, mock_display):
+def test_brewing_qr_scan_pending_applied_after_brew(state):
     state.handle(QRScanned(token="jack@example.com"))
     state.handle(BrewStart())
     state.handle(QRScanned(token="kate@example.com"))
@@ -127,7 +124,6 @@ def test_brewing_qr_scan_pending_applied_after_brew(state, mock_display):
     state.handle(brew_end(25.0))
     assert state.state == State.ARMED
     assert state._user["name"] == "kate"
-    mock_display.show_armed.assert_called_with("kate", 0)
 
 
 def test_multiple_brews_same_session(state):
@@ -160,3 +156,64 @@ def test_anon_brew_end_below_threshold_logs_noise(state, test_db):
     with db.get_connection() as con:
         row = con.execute("SELECT kind FROM brews").fetchone()
     assert row[0] == "noise"
+
+
+# -- New tests for brew options, force_logout, and broadcasts --
+
+def test_brew_options_default_double_non_decaf(state):
+    assert state._shot_type == "double"
+    assert state._decaf == False
+
+
+def test_set_brew_options(state):
+    state.set_brew_options("single", True)
+    assert state._shot_type == "single"
+    assert state._decaf == True
+
+
+def test_force_logout_in_armed_state(state, test_db):
+    state.handle(QRScanned(token="test@example.com"))
+    assert state.state == State.ARMED
+    state.force_logout()
+    assert state.state == State.IDLE
+    assert state._user is None
+
+
+def test_force_logout_ignored_during_brewing(state):
+    state.handle(QRScanned(token="test@example.com"))
+    state.handle(BrewStart())
+    assert state.state == State.BREWING
+    state.force_logout()
+    assert state.state == State.BREWING  # unchanged
+
+
+def test_last_brew_id_set_after_brew(state, test_db):
+    state.handle(QRScanned(token="test@example.com"))
+    state.handle(BrewStart())
+    state.handle(brew_end(25.0))
+    assert state._last_brew_id is not None
+    assert isinstance(state._last_brew_id, int)
+
+
+def test_last_brew_id_not_set_for_noise(state, test_db):
+    state.handle(QRScanned(token="test@example.com"))
+    state.handle(BrewStart())
+    state.handle(short_brew_end(3.0))
+    assert state._last_brew_id is None
+
+
+def test_broadcast_called_on_transition(test_db):
+    snapshots = []
+    state = SessionState(on_broadcast=lambda s: snapshots.append(s))
+    state.handle(QRScanned(token="test@example.com"))
+    assert len(snapshots) >= 1
+    assert snapshots[-1]["state"] == "armed"
+    assert snapshots[-1]["user"] == "test"
+
+
+def test_snapshot_includes_brew_options(state):
+    state.handle(QRScanned(token="test@example.com"))
+    state.set_brew_options("single", True)
+    snap = state._snapshot()
+    assert snap["shot_type"] == "single"
+    assert snap["decaf"] == True

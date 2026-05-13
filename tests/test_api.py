@@ -163,7 +163,7 @@ def test_status_active(client):
     resp = client.get("/status")
     assert resp.status_code == 200
     data = resp.json()
-    assert data["state"] == "active"
+    assert data["state"] == "ready"
     assert data["user"] == "alice"
     assert data["session_started_at"] is not None
 

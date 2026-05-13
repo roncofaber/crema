@@ -15,11 +15,12 @@ class State(Enum):
     ARMED     = auto()
     BREWING   = auto()
     ANON_BREW = auto()
+    SUMMARY   = auto()
 
 
 class SessionState:
-    def __init__(self, display):
-        self._display    = display
+    def __init__(self, on_broadcast=None):
+        self._on_broadcast = on_broadcast or (lambda s: None)
         self.state       = State.IDLE
         self._state_since = time.time()
 
@@ -31,14 +32,59 @@ class SessionState:
         self._pending_token = None
         self._summary_shown_at = None
         self._last_display_tick = None
+        self._shot_type     = "double"
+        self._decaf         = False
+        self._last_brew_id  = None
+        self._avg_rating    = None
+
+    def _snapshot(self) -> dict:
+        now = time.time()
+        if self.state == State.ARMED:
+            if self._last_brew_at is None:
+                time_remaining = max(0.0, ARMED_TIMEOUT - self.time_in_state())
+                timeout = float(ARMED_TIMEOUT)
+            else:
+                time_remaining = max(0.0, SESSION_TIMEOUT - (now - self._last_brew_at))
+                timeout = float(SESSION_TIMEOUT)
+        else:
+            time_remaining = None
+            timeout = None
+        elapsed = (now - self._brew_start) if self._brew_start else None
+        return {
+            "state": self.state.name.lower(),
+            "user": self._user["name"] if self._user else None,
+            "brew_count": self._brew_count,
+            "time_remaining": time_remaining,
+            "timeout": timeout,
+            "elapsed": elapsed,
+            "shot_type": self._shot_type,
+            "decaf": self._decaf,
+            "last_brew_id": self._last_brew_id,
+            "avg_rating": self._avg_rating,
+        }
+
+    def _broadcast(self):
+        self._on_broadcast(self._snapshot())
 
     def transition(self, new_state: State):
         log.info("state %s -> %s", self.state.name, new_state.name)
         self.state        = new_state
         self._state_since = time.time()
+        self._broadcast()
 
     def time_in_state(self) -> float:
         return time.time() - self._state_since
+
+    def set_brew_options(self, shot_type: str, decaf: bool):
+        self._shot_type = shot_type
+        self._decaf = decaf
+        self._broadcast()
+
+    def force_logout(self):
+        if self.state == State.ARMED:
+            db.end_session(self._session_id)
+            self._reset()
+            self.transition(State.IDLE)
 
     def handle(self, event):
         log.debug("event: %s", event)
@@ -51,52 +97,44 @@ class SessionState:
 
     def on_tick(self):
         now = time.time()
+        now_sec = int(now)
 
         if self.state == State.ARMED:
-            now_sec = int(now)
             if self._last_brew_at is None:
                 time_in = self.time_in_state()
                 if time_in > ARMED_TIMEOUT:
                     db.end_session(self._session_id)
                     self._reset()
                     self.transition(State.IDLE)
-                    self._display.show_idle()
                 elif self._last_display_tick != now_sec:
                     self._last_display_tick = now_sec
-                    self._display.show_armed(
-                        self._user["name"], 0,
-                        ARMED_TIMEOUT - time_in, ARMED_TIMEOUT,
-                    )
+                    self._broadcast()
             else:
                 idle_for = now - self._last_brew_at
                 if idle_for > SESSION_TIMEOUT:
                     if self._summary_shown_at is None:
-                        stats = db.get_user_stats(self._user["id"])
-                        self._display.show_summary(
-                            self._user["name"],
-                            self._brew_count,
-                            stats["total_time"],
-                        )
+                        self._avg_rating = db.get_session_avg_rating(self._session_id)
                         self._summary_shown_at = now
-                    elif now - self._summary_shown_at >= SUMMARY_DURATION:
-                        db.end_session(self._session_id)
-                        self._reset()
-                        self.transition(State.IDLE)
-                        self._display.show_idle()
+                        self.transition(State.SUMMARY)
                 elif self._last_display_tick != now_sec:
                     self._last_display_tick = now_sec
-                    self._display.show_armed(
-                        self._user["name"], self._brew_count,
-                        SESSION_TIMEOUT - idle_for, SESSION_TIMEOUT,
-                    )
+                    self._broadcast()
+
+        elif self.state == State.SUMMARY:
+            if self._summary_shown_at and now - self._summary_shown_at >= SUMMARY_DURATION:
+                db.end_session(self._session_id)
+                self._reset()
+                self.transition(State.IDLE)
 
         elif self.state == State.BREWING:
-            elapsed = now - self._brew_start
-            self._display.show_brewing(self._user["name"], self._brew_count, elapsed)
+            if self._last_display_tick != now_sec:
+                self._last_display_tick = now_sec
+                self._broadcast()
 
         elif self.state == State.ANON_BREW:
-            elapsed = now - self._brew_start
-            self._display.show_anon_brewing(elapsed)
+            if self._last_display_tick != now_sec:
+                self._last_display_tick = now_sec
+                self._broadcast()
 
     def _on_qr_scan(self, token: str):
         if self.state == State.IDLE:
@@ -106,8 +144,10 @@ class SessionState:
             self._session_id = db.start_session(user["id"])
             self._brew_count = 0
             self._last_brew_at = None
+            self._shot_type = "double"
+            self._decaf = False
+            self._last_brew_id = None
             self.transition(State.ARMED)
-            self._display.show_armed(user["name"], 0)
 
         elif self.state == State.ARMED:
             if token == self._user["token"]:
@@ -122,8 +162,10 @@ class SessionState:
                 self._session_id = db.start_session(user["id"])
                 self._brew_count = 0
                 self._last_brew_at = None
+                self._shot_type = "double"
+                self._decaf = False
+                self._last_brew_id = None
                 self.transition(State.ARMED)
-                self._display.show_armed(user["name"], 0)
 
         elif self.state == State.BREWING:
             log.info("QR scan queued during brew: %s", token)
@@ -134,22 +176,25 @@ class SessionState:
         if self.state == State.IDLE:
             self._brew_start = now
             self.transition(State.ANON_BREW)
-            self._display.show_anon_brewing(0)
 
         elif self.state == State.ARMED:
             self._brew_start = now
             self.transition(State.BREWING)
-            self._display.show_brewing(self._user["name"], self._brew_count, 0)
 
     def _on_brew_end(self, event: BrewEnd):
         kind = "brew" if event.duration >= MIN_BREW_DURATION else "noise"
         log.info("brew ended: duration=%.1fs kind=%s", event.duration, kind)
 
         if self.state == State.BREWING:
-            db.log_brew(self._session_id, event.started_at, event.ended_at, kind)
+            brew_id = db.log_brew(
+                self._session_id, event.started_at, event.ended_at, kind,
+                shot_type=self._shot_type if kind == "brew" else None,
+                decaf=int(self._decaf) if kind == "brew" else None
+            )
             if kind == "brew":
                 self._brew_count += 1
                 self._last_brew_at = time.time()
+                self._last_brew_id = brew_id
             self._brew_start = None
 
             if self._pending_token:
@@ -161,17 +206,17 @@ class SessionState:
                 self._session_id = db.start_session(user["id"])
                 self._brew_count = 0
                 self._last_brew_at = None
+                self._shot_type = "double"
+                self._decaf = False
+                self._last_brew_id = None
                 self.transition(State.ARMED)
-                self._display.show_armed(user["name"], 0)
             else:
                 self.transition(State.ARMED)
-                self._display.show_armed(self._user["name"], self._brew_count)
 
         elif self.state == State.ANON_BREW:
             db.log_brew(None, event.started_at, event.ended_at, kind)
             self._brew_start = None
             self.transition(State.IDLE)
-            self._display.show_idle()
 
     def _reset(self):
         self._user          = None
@@ -182,3 +227,7 @@ class SessionState:
         self._pending_token = None
         self._summary_shown_at = None
         self._last_display_tick = None
+        self._shot_type     = "double"
+        self._decaf         = False
+        self._last_brew_id  = None
+        self._avg_rating    = None
