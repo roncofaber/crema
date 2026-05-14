@@ -13,12 +13,14 @@
 
 | GY-291 pin | Pi pin | GPIO |
 |---|---|---|
-| VCC | 3.3 V (pin 1) | — |
 | GND | GND (pin 6) | — |
+| VCC | 3.3V (pin 1) | — |
 | CS | CE1 (pin 26) | GPIO 7 |
-| SDO/MISO | MISO (pin 21) | GPIO 9 |
-| SDA/MOSI | MOSI (pin 19) | GPIO 10 |
-| SCL/CLK | SCLK (pin 23) | GPIO 11 |
+| INT1 | — | not connected |
+| INT2 | — | not connected |
+| SDO | MISO (pin 21) | GPIO 9 |
+| SDA | MOSI (pin 19) | GPIO 10 |
+| SCL | SCLK (pin 23) | GPIO 11 |
 
 Enable SPI in `raspi-config` → Interface Options → SPI.
 
