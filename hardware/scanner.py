@@ -40,7 +40,8 @@ class QRScanner:
             try:
                 if InputDevice(path).name == SCANNER_DEVICE_NAME:
                     return path
-            except Exception:
+            except Exception as e:
+                log.debug("could not open input device %s: %s", path, e)
                 continue
         return None
 

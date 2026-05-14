@@ -14,15 +14,15 @@ export function RatingPrompt({ snapshot, onDismiss }: Props) {
   useEffect(() => {
     const id = setInterval(() => {
       setCountdown(c => {
-        if (c <= 1) { onDismiss(); return 0 }
+        if (c <= 1) { clearInterval(id); onDismiss(); return 0 }
         return c - 1
       })
     }, 1000)
     return () => clearInterval(id)
-  }, [])
+  }, [onDismiss])
 
   function rate(n: number) {
-    if (last_brew_id != null) api.kioskRate(last_brew_id, n)
+    if (last_brew_id != null) api.kioskRate(last_brew_id, n).catch(console.error)
     onDismiss()
   }
 
@@ -37,7 +37,7 @@ export function RatingPrompt({ snapshot, onDismiss }: Props) {
       <div className="flex gap-5 my-2">
         {[1, 2, 3, 4, 5].map(n => (
           <button key={n} onClick={() => rate(n)}
-            className="text-6xl leading-none text-crema-400 hover:text-crema-300 transition-colors">
+            className="text-6xl leading-none text-crema-400 active:text-crema-300 active:scale-110 transition-all">
             ★
           </button>
         ))}

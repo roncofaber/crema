@@ -22,6 +22,9 @@ class Brew(BaseModel):
     ended_at: float
     duration: float
     kind: str
+    shot_type: str | None = None
+    decaf: bool | None = None
+    rating: int | None = None
 
 
 class OverallStats(BaseModel):

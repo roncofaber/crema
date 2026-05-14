@@ -42,7 +42,11 @@ class VibrationSensor:
 
         spi = busio.SPI(board.SCLK, MOSI=board.MOSI, MISO=board.MISO)
         cs = digitalio.DigitalInOut(board.CE1)
-        self._accel = ADXL345SPI(spi, cs)
+        try:
+            self._accel = ADXL345SPI(spi, cs)
+        except Exception as e:
+            log.error("ADXL345 init failed: %s — sensor disabled", e)
+            return
         self._thread.start()
 
     def stop(self):
@@ -50,6 +54,8 @@ class VibrationSensor:
 
     def _magnitude(self):
         """Read acceleration from ADXL345 and return magnitude in m/s²."""
+        if self._accel is None:
+            return 0.0
         x, y, z = self._accel.acceleration
         return math.sqrt(x * x + y * y + z * z)
 

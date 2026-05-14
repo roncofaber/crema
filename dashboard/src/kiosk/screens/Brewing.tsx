@@ -15,8 +15,8 @@ export function Brewing({ snapshot }: Props) {
   const BREW_MAX = 180
   const fill = Math.min(1, (elapsed ?? 0) / BREW_MAX)
 
-  function setShot(v: string) { api.kioskBrewOptions({ shot_type: v, decaf }) }
-  function setDecaf(v: boolean) { api.kioskBrewOptions({ shot_type, decaf: v }) }
+  function setShot(v: string) { api.kioskBrewOptions({ shot_type: v as 'single' | 'double', decaf }).catch(console.error) }
+  function setDecaf(v: boolean) { api.kioskBrewOptions({ shot_type, decaf: v }).catch(console.error) }
 
   return (
     <div className="h-screen bg-bg flex flex-col">

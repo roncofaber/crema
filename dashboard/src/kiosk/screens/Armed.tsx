@@ -35,8 +35,8 @@ export function Armed({ snapshot }: Props) {
   const { user, brew_count, time_remaining, timeout, shot_type, decaf } = snapshot
   const frac = time_remaining != null && timeout ? Math.max(0, time_remaining / timeout) : 1
 
-  function setShot(v: string | boolean) { api.kioskBrewOptions({ shot_type: String(v), decaf }) }
-  function setDecaf(v: string | boolean) { api.kioskBrewOptions({ shot_type, decaf: v === true || v === 'true' }) }
+  function setShot(v: string | boolean) { api.kioskBrewOptions({ shot_type: String(v) as 'single' | 'double', decaf }).catch(console.error) }
+  function setDecaf(v: string | boolean) { api.kioskBrewOptions({ shot_type, decaf: v === true || v === 'true' }).catch(console.error) }
 
   return (
     <div className="h-screen bg-bg flex flex-col">
@@ -67,7 +67,7 @@ export function Armed({ snapshot }: Props) {
             onChange={setDecaf}
           />
           <button
-            onClick={() => api.kioskLogout()}
+            onClick={() => api.kioskLogout().catch(console.error)}
             className="py-4 rounded text-sm uppercase tracking-[0.16em] text-faint border border-border bg-transparent"
           >
             Logout

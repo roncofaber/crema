@@ -1,4 +1,5 @@
 import logging
+import threading
 from enum import Enum, auto
 import time
 import core.db as db
@@ -20,6 +21,7 @@ class State(Enum):
 
 class SessionState:
     def __init__(self, on_broadcast=None):
+        self._lock = threading.RLock()  # RLock: transition→broadcast→snapshot re-enters
         self._on_broadcast = on_broadcast or (lambda s: None)
         self.state       = State.IDLE
         self._state_since = time.time()
@@ -38,6 +40,10 @@ class SessionState:
         self._avg_rating    = None
 
     def _snapshot(self) -> dict:
+        with self._lock:
+            return self._snapshot_unlocked()
+
+    def _snapshot_unlocked(self) -> dict:
         now = time.time()
         if self.state == State.ARMED:
             if self._last_brew_at is None:
@@ -64,7 +70,7 @@ class SessionState:
         }
 
     def _broadcast(self):
-        self._on_broadcast(self._snapshot())
+        self._on_broadcast(self._snapshot_unlocked())
 
     def transition(self, new_state: State):
         log.info("state %s -> %s", self.state.name, new_state.name)
@@ -76,26 +82,33 @@ class SessionState:
         return time.time() - self._state_since
 
     def set_brew_options(self, shot_type: str, decaf: bool):
-        self._shot_type = shot_type
-        self._decaf = decaf
-        self._broadcast()
+        with self._lock:
+            self._shot_type = shot_type
+            self._decaf = decaf
+            self._broadcast()
 
     def force_logout(self):
-        if self.state == State.ARMED:
-            db.end_session(self._session_id)
-            self._reset()
-            self.transition(State.IDLE)
+        with self._lock:
+            if self.state == State.ARMED:
+                db.end_session(self._session_id)
+                self._reset()
+                self.transition(State.IDLE)
 
     def handle(self, event):
-        log.debug("event: %s", event)
-        if isinstance(event, QRScanned):
-            self._on_qr_scan(event.token)
-        elif isinstance(event, BrewStart):
-            self._on_brew_start()
-        elif isinstance(event, BrewEnd):
-            self._on_brew_end(event)
+        with self._lock:
+            log.debug("event: %s", event)
+            if isinstance(event, QRScanned):
+                self._on_qr_scan(event.token)
+            elif isinstance(event, BrewStart):
+                self._on_brew_start()
+            elif isinstance(event, BrewEnd):
+                self._on_brew_end(event)
 
     def on_tick(self):
+        with self._lock:
+            self._on_tick()
+
+    def _on_tick(self):
         now = time.time()
         now_sec = int(now)
 

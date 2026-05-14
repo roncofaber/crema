@@ -42,3 +42,8 @@ if os.path.isdir(_DIST):
         return FileResponse(os.path.join(_DIST, "index.html"))
 
     app.mount("/ui", StaticFiles(directory=_DIST, html=True), name="dashboard")
+else:
+    import logging as _logging
+    _logging.getLogger(__name__).warning(
+        "dashboard/dist/ not found — /kiosk and /ui will 404. Run: npm run build in dashboard/"
+    )

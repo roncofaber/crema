@@ -1,6 +1,7 @@
 import logging
+from typing import Literal
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from api.auth import verify_token
 import core.kiosk as kiosk
 import core.db as db
@@ -33,13 +34,13 @@ async def kiosk_ws(websocket: WebSocket):
 # ── REST endpoints ────────────────────────────────────────────────────────────
 
 class BrewOptions(BaseModel):
-    shot_type: str   # "single" | "double"
+    shot_type: Literal["single", "double"]
     decaf: bool
 
 
 class RateRequest(BaseModel):
     brew_id: int
-    rating: int      # 1–5
+    rating: int = Field(..., ge=1, le=5)
 
 
 def _require_state():
@@ -68,7 +69,5 @@ def kiosk_brew_options(opts: BrewOptions):
 @router.post("/kiosk/rate", dependencies=[Depends(verify_token)])
 def kiosk_rate(req: RateRequest):
     """Submit a 1–5 star rating for a completed brew."""
-    if not 1 <= req.rating <= 5:
-        raise HTTPException(status_code=422, detail="rating must be 1–5")
     db.rate_brew(req.brew_id, req.rating)
     return {"ok": True}

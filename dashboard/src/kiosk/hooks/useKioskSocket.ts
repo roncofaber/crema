@@ -46,7 +46,9 @@ export function useKioskSocket() {
     ws.onmessage = (e) => {
       try {
         setSnapshot(JSON.parse(e.data))
-      } catch {}
+      } catch (err) {
+        console.error('Failed to parse kiosk snapshot:', err, e.data)
+      }
     }
 
     ws.onclose = () => {

@@ -36,7 +36,7 @@ def _on_broadcast(snapshot: dict):
     try:
         _snapshot_q.put_nowait(snapshot)
     except Exception:
-        pass  # full queue: drop, client gets next update
+        log.debug("snapshot queue full — dropping update")
 
 
 async def broadcast_loop():
@@ -52,7 +52,8 @@ async def broadcast_loop():
         for ws in list(_ws_clients):
             try:
                 await ws.send_json(snapshot)
-            except Exception:
+            except Exception as e:
+                log.debug("WebSocket send failed, dropping client: %s", e)
                 dead.add(ws)
         _ws_clients.difference_update(dead)
 

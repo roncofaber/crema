@@ -39,7 +39,8 @@ def list_brews(
         SELECT
             b.id,
             COALESCE(u.name, 'anonymous') AS user,
-            b.started_at, b.ended_at, b.duration, b.kind
+            b.started_at, b.ended_at, b.duration, b.kind,
+            b.shot_type, CAST(b.decaf AS INTEGER) AS decaf, b.rating
         FROM brews b
         LEFT JOIN sessions s ON b.session_id = s.id
         LEFT JOIN users u    ON s.user_id    = u.id
@@ -48,4 +49,8 @@ def list_brews(
         LIMIT ?
     """, params).fetchall()
 
-    return [dict(r) for r in rows]
+    rows = [dict(r) for r in rows]
+    for r in rows:
+        if r["decaf"] is not None:
+            r["decaf"] = bool(r["decaf"])
+    return rows

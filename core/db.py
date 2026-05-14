@@ -34,6 +34,11 @@ def init_db():
                 kind        TEXT NOT NULL       -- 'brew' or 'noise'
             );
         """)
+        con.executescript("""
+            CREATE INDEX IF NOT EXISTS idx_sessions_user_id  ON sessions(user_id);
+            CREATE INDEX IF NOT EXISTS idx_brews_session_id  ON brews(session_id);
+            CREATE INDEX IF NOT EXISTS idx_brews_started_at  ON brews(started_at);
+        """)
         # Add new columns for per-brew annotations and ratings (SQLite 3.35+)
         try:
             con.execute("ALTER TABLE brews ADD COLUMN shot_type TEXT")
