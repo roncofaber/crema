@@ -14,22 +14,22 @@ def _follow(units: list[str], lines: int):
     subprocess.run(args)
 
 
-@logs.command()
+@logs.command(name="all")
 @click.option("-n", default=50, show_default=True, help="Lines of history before following.")
-def all(n):
-    """Follow logs from both kiosk and API."""
-    _follow(["crema-kiosk", "crema-api"], n)
+def logs_all(n):
+    """Follow logs from kiosk and browser services."""
+    _follow(["crema-kiosk", "crema-browser"], n)
 
 
 @logs.command()
 @click.option("-n", default=50, show_default=True, help="Lines of history before following.")
 def kiosk(n):
-    """Follow kiosk logs (sensor, scanner, state machine)."""
+    """Follow kiosk logs (sensor, scanner, state machine, API)."""
     _follow(["crema-kiosk"], n)
 
 
 @logs.command()
 @click.option("-n", default=50, show_default=True, help="Lines of history before following.")
-def api(n):
-    """Follow API server logs."""
-    _follow(["crema-api"], n)
+def browser(n):
+    """Follow browser (Chromium kiosk display) logs."""
+    _follow(["crema-browser"], n)

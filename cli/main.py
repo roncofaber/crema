@@ -3,6 +3,7 @@ import click
 from cli.db import db
 from cli.logs import logs
 from cli.sensor import sensor
+from cli.service import service
 from cli.stats import stats
 from cli.users import users
 
@@ -26,4 +27,5 @@ cli.add_command(stats)
 cli.add_command(db)
 cli.add_command(users)
 cli.add_command(sensor)
+cli.add_command(service)
 cli.add_command(logs)
