@@ -17,7 +17,24 @@ def sensor():
     from config import ADXL_BREW_THRESHOLD
 
     i2c = busio.I2C(board.SCL, board.SDA)
-    accel = adafruit_adxl34x.ADXL345(i2c)
+
+    def _init_accel():
+        for addr in (0x53, 0x1D):
+            try:
+                dev = adafruit_adxl34x.ADXL345(i2c, address=addr)
+                click.echo(f"Found ADXL345 at 0x{addr:02x}")
+                return dev
+            except (ValueError, OSError):
+                pass
+        return None
+
+    accel = None
+    while accel is None:
+        accel = _init_accel()
+        if accel is None:
+            sys.stdout.write("\r  ADXL345 not found — check wiring (i2cdetect -y 1), retrying...  ")
+            sys.stdout.flush()
+            time.sleep(1)
 
     click.echo("ADXL345 — live readout  (Ctrl+C to quit)")
     click.echo("─" * 43)
