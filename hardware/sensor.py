@@ -54,8 +54,12 @@ class VibrationSensor:
         """Read acceleration from ADXL345 and return magnitude in m/s²."""
         if self._accel is None:
             return 0.0
-        x, y, z = self._accel.acceleration
-        return math.sqrt(x * x + y * y + z * z)
+        try:
+            x, y, z = self._accel.acceleration
+            return math.sqrt(x * x + y * y + z * z)
+        except OSError as e:
+            log.warning("I2C read error: %s — skipping sample", e)
+            return 0.0
 
     def _run(self):
         while True:

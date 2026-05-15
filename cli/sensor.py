@@ -26,7 +26,13 @@ def sensor():
 
     try:
         while True:
-            x, y, z = accel.acceleration
+            try:
+                x, y, z = accel.acceleration
+            except OSError as e:
+                sys.stdout.write(f"\r  I2C error: {e} — retrying...{' ' * 20}")
+                sys.stdout.flush()
+                time.sleep(0.5)
+                continue
             mag = math.sqrt(x * x + y * y + z * z)
             peak = max(peak, mag)
 
