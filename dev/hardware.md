@@ -6,23 +6,28 @@
 |---|---|---|
 | SBC | Raspberry Pi 4 | — |
 | Display | FREENOVE 5" MIPI DSI touchscreen (800×480, 5-point capacitive) | MIPI DSI ribbon |
-| Accelerometer | AOICRIE GY-291 ADXL345 3-axis | SPI (CE1) |
+| Accelerometer | AOICRIE GY-291 ADXL345 3-axis | I2C (0x53) |
 | QR scanner | MINJCODE MJ2818A | USB HID |
 
-## ADXL345 wiring (SPI)
+## ADXL345 wiring (I2C)
 
-| GY-291 pin | Pi pin | GPIO |
-|---|---|---|
-| GND | GND (pin 6) | — |
-| VCC | 3.3V (pin 1) | — |
-| CS | CE1 (pin 26) | GPIO 7 |
-| INT1 | — | not connected |
-| INT2 | — | not connected |
-| SDO | MISO (pin 21) | GPIO 9 |
-| SDA | MOSI (pin 19) | GPIO 10 |
-| SCL | SCLK (pin 23) | GPIO 11 |
+| GY-291 pin | Pi pin | GPIO | Notes |
+|---|---|---|---|
+| GND | GND (pin 6) | — | |
+| VCC | 3.3V (pin 1) | — | |
+| CS  | 3.3V (pin 1) | — | must be HIGH to select I2C mode |
+| SDO | GND (pin 6)  | — | sets I2C address to 0x53 |
+| SDA | SDA (pin 3)  | GPIO 2 | |
+| SCL | SCL (pin 5)  | GPIO 3 | |
+| INT1 | — | not connected | |
+| INT2 | — | not connected | |
 
-Enable SPI in `raspi-config` → Interface Options → SPI.
+Enable I2C in `raspi-config` → Interface Options → I2C.
+
+Verify the chip is visible before running software:
+```
+i2cdetect -y 1   # should show 53 at row 50, col 3
+```
 
 ## Display
 

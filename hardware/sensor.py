@@ -17,7 +17,7 @@ POLL_INTERVAL = 1.0 / ADXL_SAMPLE_RATE
 
 class VibrationSensor:
     """
-    Monitors an ADXL345 3-axis accelerometer over SPI.
+    Monitors an ADXL345 3-axis accelerometer over I2C.
     Posts BrewStart and BrewEnd events to a queue with debouncing:
       - MIN_VIBRATION_PULSE (0.5s): acceleration magnitude must stay above threshold this long to count
       - BREW_CONFIRM_WINDOW (2s): vibration must be sustained before BrewStart fires
@@ -37,13 +37,11 @@ class VibrationSensor:
     def start(self):
         import board
         import busio
-        import digitalio
-        from hardware.adxl345 import ADXL345SPI
+        import adafruit_adxl34x
 
-        spi = busio.SPI(board.SCLK, MOSI=board.MOSI, MISO=board.MISO)
-        cs = digitalio.DigitalInOut(board.CE1)
+        i2c = busio.I2C(board.SCL, board.SDA)
         try:
-            self._accel = ADXL345SPI(spi, cs)
+            self._accel = adafruit_adxl34x.ADXL345(i2c)
         except Exception as e:
             log.error("ADXL345 init failed: %s — sensor disabled", e)
             return

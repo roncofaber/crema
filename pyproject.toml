@@ -5,7 +5,7 @@ requires-python = ">=3.11"
 dependencies = [
     "evdev",
     "adafruit-circuitpython-rgb-display",
-    "adafruit-circuitpython-busdevice",
+    "adafruit-circuitpython-adxl34x",
     "Pillow",
     "click",
     "fastapi",

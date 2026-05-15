@@ -10,16 +10,14 @@ def sensor():
     try:
         import board
         import busio
-        import digitalio
+        import adafruit_adxl34x
     except ImportError:
         raise click.ClickException("Hardware libs not available — run this on the Pi.")
 
     from config import ADXL_BREW_THRESHOLD
-    from hardware.adxl345 import ADXL345SPI
 
-    spi = busio.SPI(board.SCLK, MOSI=board.MOSI, MISO=board.MISO)
-    cs = digitalio.DigitalInOut(board.CE1)
-    accel = ADXL345SPI(spi, cs)
+    i2c = busio.I2C(board.SCL, board.SDA)
+    accel = adafruit_adxl34x.ADXL345(i2c)
 
     click.echo("ADXL345 — live readout  (Ctrl+C to quit)")
     click.echo("─" * 43)
