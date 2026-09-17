@@ -19,7 +19,10 @@ def cli():
 @click.option("--reload", is_flag=True, default=False, help="Auto-reload on code changes (dev only).")
 def serve(host, port, reload):
     """Start the CREMA API server."""
+    import os
     import uvicorn
+
+    os.environ["CREMA_START_HARDWARE"] = "1"
     uvicorn.run("api.main:app", host=host, port=port, reload=reload)
 
 

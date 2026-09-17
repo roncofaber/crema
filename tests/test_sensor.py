@@ -86,3 +86,15 @@ def test_post_brew_spike_does_not_reset_timer():
     events = run_steps([(HIGH, 30), (LOW, 0.3), (HIGH, 0.3), (LOW, 15)])
     brew_ends = [e for e in events if isinstance(e, BrewEnd)]
     assert len(brew_ends) == 1
+
+
+def test_start_disables_sensor_when_i2c_bus_is_unavailable():
+    from hardware.sensor import VibrationSensor
+
+    sensor = VibrationSensor(queue.Queue())
+    sys.modules["busio"].I2C.side_effect = OSError("I2C unavailable")
+    try:
+        sensor.start()
+    finally:
+        sys.modules["busio"].I2C.side_effect = None
+    assert sensor._accel is None

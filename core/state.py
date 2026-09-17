@@ -28,6 +28,7 @@ class SessionState:
 
         self._user          = None   # {id, token, name}
         self._session_id    = None
+        self._session_started_at = None
         self._brew_count    = 0
         self._last_brew_at  = None
         self._brew_start    = None
@@ -67,6 +68,8 @@ class SessionState:
             "decaf": self._decaf,
             "last_brew_id": self._last_brew_id,
             "avg_rating": self._avg_rating,
+            "session_started_at": self._session_started_at,
+            "brew_started_at": self._brew_start,
         }
 
     def _broadcast(self):
@@ -155,6 +158,7 @@ class SessionState:
             log.info("user %r logged in (id=%s)", user["name"], user["id"])
             self._user       = user
             self._session_id = db.start_session(user["id"])
+            self._session_started_at = time.time()
             self._brew_count = 0
             self._last_brew_at = None
             self._shot_type = "double"
@@ -173,6 +177,7 @@ class SessionState:
                 log.info("user %r logged in (id=%s)", user["name"], user["id"])
                 self._user       = user
                 self._session_id = db.start_session(user["id"])
+                self._session_started_at = time.time()
                 self._brew_count = 0
                 self._last_brew_at = None
                 self._shot_type = "double"
@@ -217,6 +222,7 @@ class SessionState:
                 user = db.get_or_create_user(pending)
                 self._user       = user
                 self._session_id = db.start_session(user["id"])
+                self._session_started_at = time.time()
                 self._brew_count = 0
                 self._last_brew_at = None
                 self._shot_type = "double"
@@ -234,6 +240,7 @@ class SessionState:
     def _reset(self):
         self._user          = None
         self._session_id    = None
+        self._session_started_at = None
         self._brew_count    = 0
         self._last_brew_at  = None
         self._brew_start    = None

@@ -35,15 +35,15 @@ class VibrationSensor:
         self._brew_start_fired = False # whether BrewStart has been posted this cycle
 
     def start(self):
-        import board
-        import busio
-        import adafruit_adxl34x
-
-        i2c = busio.I2C(board.SCL, board.SDA)
         try:
+            import board
+            import busio
+            import adafruit_adxl34x
+
+            i2c = busio.I2C(board.SCL, board.SDA)
             self._accel = adafruit_adxl34x.ADXL345(i2c)
         except Exception as e:
-            log.error("ADXL345 init failed: %s — sensor disabled", e)
+            log.error("ADXL345 init failed: %s - sensor disabled", e)
             return
         self._thread.start()
 

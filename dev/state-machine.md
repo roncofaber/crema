@@ -83,7 +83,9 @@ In `ARMED` state, `on_tick()` runs the timer at 1 Hz:
   "shot_type": "double",
   "decaf": false,
   "last_brew_id": 42,
-  "avg_rating": null
+  "avg_rating": null,
+  "session_started_at": 1715000000.0,
+  "brew_started_at": null
 }
 ```
 
@@ -91,3 +93,4 @@ In `ARMED` state, `on_tick()` runs the timer at 1 Hz:
 `elapsed` is non-null only in `BREWING` / `ANON_BREW`.
 `last_brew_id` is `null` if no brew in this session yet (or if the brew was noise).
 `avg_rating` is non-null only in `SUMMARY`.
+`session_started_at` is set for authenticated sessions. `brew_started_at` is set while a brew is active.

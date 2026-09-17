@@ -6,10 +6,12 @@ A single Python process (`main.py`) owns everything at runtime:
 
 ```
 main.py
-  ├── db.init_db()              — schema migration
-  ├── kiosk.start()             — spawns hardware threads + kiosk loop
-  └── uvicorn.run(app, ...)     — FastAPI (blocks)
-        └── startup task: kiosk.broadcast_loop()  — asyncio loop draining snapshot queue
+  ├── enables hardware startup
+  └── uvicorn.run(app, ...)     - FastAPI (blocks)
+        └── lifespan
+              ├── db.init_db()
+              ├── kiosk.start()
+              └── kiosk.broadcast_loop()
 ```
 
 There are **no separate processes** and **no IPC**. The hardware loop and the API share the same in-process `SessionState` singleton via `core/kiosk.py`.
@@ -27,7 +29,7 @@ core/
 
 hardware/
   scanner.py        QRScanner — reads USB HID device, emits QRScanned
-  sensor.py         VibrationSensor — ADXL345 over SPI, emits BrewStart/BrewEnd
+  sensor.py         VibrationSensor - ADXL345 over I2C, emits BrewStart/BrewEnd
 
 api/
   main.py           FastAPI app, CORS, static files, startup lifecycle
@@ -74,7 +76,7 @@ Snapshots are best-effort: if the queue is full (burst), the oldest update is dr
 - Unset → auth disabled (local dev / LAN use)
 - Set → all REST routes require `Authorization: Bearer <token>`
 
-The WebSocket (`/ws/kiosk`) has **no auth** — it is local-display-only and streams no secrets.
+The browser bundle must receive the same value as `VITE_API_TOKEN` at build time. Browser tokens are visible to users, so this mode is intended for trusted local networks. The WebSocket (`/ws/kiosk`) has no auth and is local-display-only.
 
 ## Database
 

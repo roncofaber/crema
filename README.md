@@ -8,7 +8,7 @@ A Raspberry Pi kiosk that tracks who makes espresso, how many shots, and for how
 
 - Raspberry Pi 4
 - FREENOVE 5" MIPI DSI touchscreen (800×480, capacitive touch) — driver-free, plug-and-play
-- ADXL345 3-axis accelerometer (GY-291) via SPI on CE1
+- ADXL345 3-axis accelerometer (GY-291) via I2C
 - MINJCODE MJ2818A USB HID QR code scanner
 
 ## Setup
@@ -19,7 +19,7 @@ source venv/bin/activate
 pip install -e .
 ```
 
-The scanner is detected automatically by device name. The database is created at `data/espresso.db` on first run. Enable SPI (`raspi-config → Interface Options → SPI`) before running on the Pi.
+The scanner is detected automatically by device name. The database is created at `data/espresso.db` on first run. Enable I2C (`raspi-config` then Interface Options then I2C) before running on the Pi.
 
 ## CLI
 
@@ -95,7 +95,7 @@ FastAPI server at port 8000. Full reference: [`dev/api-reference.md`](dev/api-re
 | `/ui` | React dashboard (SPA) |
 | `/kiosk` | Touch kiosk UI (SPA) |
 
-**Authentication:** set `CREMA_API_TOKEN` in the environment. All REST routes then require `Authorization: Bearer <token>`. The WebSocket has no auth.
+**Authentication:** set `CREMA_API_TOKEN` in the service environment. When building the browser UI, set `VITE_API_TOKEN` to the same value or export `CREMA_API_TOKEN` before running the deployment scripts. All REST routes then require `Authorization: Bearer <token>`. The WebSocket has no auth. Browser tokens are visible to users, so use this mode only on a trusted local network.
 
 ## Dashboard
 

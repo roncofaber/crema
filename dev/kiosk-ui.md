@@ -55,6 +55,8 @@ const { snapshot, connected } = useKioskSocket()
   decaf: boolean
   last_brew_id: number | null
   avg_rating: number | null       // non-null in SUMMARY
+  session_started_at: number | null
+  brew_started_at: number | null
 }
 ```
 

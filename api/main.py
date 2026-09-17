@@ -1,4 +1,5 @@
 import asyncio
+from contextlib import asynccontextmanager, suppress
 import os
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,12 +8,27 @@ from fastapi.staticfiles import StaticFiles
 from api.auth import verify_token
 from api.routers import users, brews, stats, status, kiosk as kiosk_router
 import core.kiosk as kiosk
+import core.db as db
 
-app = FastAPI(title="CREMA API")
 
-@app.on_event("startup")
-async def _start_kiosk_broadcaster():
-    asyncio.create_task(kiosk.broadcast_loop())
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    db.init_db()
+    start_hardware = os.getenv("CREMA_START_HARDWARE") == "1"
+    if start_hardware:
+        kiosk.start()
+    broadcaster = asyncio.create_task(kiosk.broadcast_loop())
+    try:
+        yield
+    finally:
+        broadcaster.cancel()
+        with suppress(asyncio.CancelledError):
+            await broadcaster
+        if start_hardware:
+            kiosk.stop()
+
+
+app = FastAPI(title="CREMA API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

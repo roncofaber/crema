@@ -15,7 +15,7 @@ def init_db():
             CREATE TABLE IF NOT EXISTS users (
                 id      INTEGER PRIMARY KEY AUTOINCREMENT,
                 token   TEXT UNIQUE NOT NULL,   -- QR code content (e.g. email)
-                name    TEXT NOT NULL            -- display name
+                name    TEXT UNIQUE NOT NULL     -- display name
             );
 
             CREATE TABLE IF NOT EXISTS sessions (
@@ -52,6 +52,18 @@ def init_db():
             con.execute("ALTER TABLE brews ADD COLUMN rating INTEGER")
         except sqlite3.OperationalError:
             pass  # Column already exists
+        rows = con.execute("SELECT id, name FROM users ORDER BY id").fetchall()
+        used_names = set()
+        for user_id, name in rows:
+            candidate = name
+            suffix = 2
+            while candidate in used_names:
+                candidate = f"{name}-{suffix}"
+                suffix += 1
+            if candidate != name:
+                con.execute("UPDATE users SET name=? WHERE id=?", (candidate, user_id))
+            used_names.add(candidate)
+        con.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_name ON users(name)")
         # Close any sessions left open by a previous unclean shutdown.
         con.execute(
             "UPDATE sessions SET ended_at=? WHERE ended_at IS NULL",
@@ -61,15 +73,23 @@ def init_db():
 
 def get_or_create_user(token: str) -> dict:
     """Return user row for the given QR token, creating it if new."""
-    local_part = token.split("@")[0]
+    base_name = token.split("@")[0]
     with get_connection() as con:
-        con.execute(
-            "INSERT OR IGNORE INTO users (token, name) VALUES (?, ?)",
-            (token, local_part),
-        )
+        con.execute("BEGIN IMMEDIATE")
         row = con.execute(
             "SELECT id, token, name FROM users WHERE token=?", (token,)
         ).fetchone()
+        if row is None:
+            name = base_name
+            suffix = 2
+            while con.execute("SELECT 1 FROM users WHERE name=?", (name,)).fetchone():
+                name = f"{base_name}-{suffix}"
+                suffix += 1
+            cur = con.execute(
+                "INSERT INTO users (token, name) VALUES (?, ?)",
+                (token, name),
+            )
+            row = (cur.lastrowid, token, name)
     return {"id": row[0], "token": row[1], "name": row[2]}
 
 

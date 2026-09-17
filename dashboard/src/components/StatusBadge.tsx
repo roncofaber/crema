@@ -1,26 +1,10 @@
-import { useEffect, useState } from "react"
 import { api } from "../api"
 import { usePolling } from "../hooks/usePolling"
-
-function useElapsed(startTs: number | null): string {
-  const [, setTick] = useState(0)
-
-  useEffect(() => {
-    if (!startTs) return
-    const id = setInterval(() => setTick(t => t + 1), 1000)
-    return () => clearInterval(id)
-  }, [startTs])
-
-  if (!startTs) return ""
-  const s = Math.floor(Date.now() / 1000 - startTs)
-  const m = Math.floor(s / 60)
-  const sec = s % 60
-  return m ? `${m}m ${sec}s` : `${sec}s`
-}
+import { useElapsed } from "../hooks/useElapsed"
 
 export function StatusBadge() {
   const { data: status } = usePolling(api.status, 5000)
-  const elapsed = useElapsed(status?.session_started_at ?? null)
+  const elapsed = useElapsed(status?.brew_started_at ?? status?.session_started_at ?? null)
 
   if (!status) return <span className="font-plex text-sm text-faint">—</span>
 

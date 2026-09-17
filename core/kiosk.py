@@ -64,6 +64,10 @@ def start():
     WebSocket broadcasting begins once the asyncio loop is running."""
     global _state, _hw_thread
 
+    if _hw_thread and _hw_thread.is_alive():
+        return
+    _stop.clear()
+
     from core.state import SessionState
     from hardware.scanner import QRScanner
     from hardware.sensor import VibrationSensor

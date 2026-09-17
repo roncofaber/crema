@@ -2,7 +2,7 @@
 
 ## Target
 
-Raspberry Pi 4 running Raspberry Pi OS (bookworm). Python 3.11+. Node 18+ for building the dashboard.
+Raspberry Pi 4 running Raspberry Pi OS (bookworm). Python 3.11+. Node 20.19+ or 22.12+ for building the dashboard.
 
 ## Services
 
@@ -36,7 +36,7 @@ cd ~/crema
 
 The script:
 1. Creates `~/crema/venv` (if absent) and installs Python deps (`pip install -e .`)
-2. Builds the React dashboard (`npm install && npm run build` in `dashboard/`)
+2. Builds the React dashboard (`npm ci && npm run build` in `dashboard/`)
 3. Copies service files to `/etc/systemd/system/`
 4. Enables and starts `crema-kiosk` and `crema-browser`
 
@@ -60,10 +60,19 @@ Environment=CREMA_API_TOKEN=your-secret-token
 
 Then: `sudo systemctl daemon-reload && sudo systemctl restart crema-kiosk`
 
-## SPI setup
+The browser bundle also needs the token when authentication is enabled. Export the same value before installing or updating so the build receives it automatically:
 
 ```bash
-sudo raspi-config  # Interface Options → SPI → Enable
+export CREMA_API_TOKEN=your-secret-token
+./deploy/update.sh
+```
+
+The token is embedded in the browser bundle. Use this mode only on a trusted local network. Use network-level access controls if the service is reachable outside that network.
+
+## I2C setup
+
+```bash
+sudo raspi-config  # Interface Options, then I2C, then Enable
 sudo reboot
 ```
 
@@ -71,7 +80,6 @@ sudo reboot
 
 ```bash
 crema logs kiosk    # follow crema-kiosk journal
-crema logs api      # (same service now, alias kept for muscle memory)
 crema logs all      # both services
 
 # Or directly:
@@ -89,7 +97,7 @@ sudo systemctl stop crema-browser   # kill Chromium
 
 ## Python dependencies (hardware-only)
 
-`adafruit-circuitpython-adxl34x` requires the Pi's SPI bus and CircuitPython board abstraction (`board`, `busio`, `digitalio`). These are available on Pi OS but not on a dev laptop — the sensor import is guarded in `hardware/sensor.py` inside `start()` so tests can run without them.
+`adafruit-circuitpython-adxl34x` requires the Pi's I2C bus and CircuitPython board abstraction (`board`, `busio`). These are available on Pi OS but not on a development laptop. The sensor import is guarded in `hardware/sensor.py` inside `start()` so tests can run without them.
 
 ## Dashboard env vars (optional)
 

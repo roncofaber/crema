@@ -1,4 +1,7 @@
 import sqlite3
+import time as time_mod
+from unittest.mock import MagicMock, patch
+
 import pytest
 from fastapi.testclient import TestClient
 import core.db as db_module
@@ -22,7 +25,8 @@ def client(tmp_path, monkeypatch):
             con.close()
 
     app.dependency_overrides[get_db] = override_get_db
-    yield TestClient(app)
+    with TestClient(app) as test_client:
+        yield test_client
     app.dependency_overrides.clear()
 
 
@@ -67,9 +71,6 @@ def test_patch_user_name_conflict(client):
     db_module.get_or_create_user("bob@example.com")
     resp = client.patch("/users/alice", json={"name": "bob"})
     assert resp.status_code == 409
-
-
-import time as time_mod
 
 
 def test_list_brews_empty(client):
@@ -168,6 +169,25 @@ def test_status_active(client):
     assert data["session_started_at"] is not None
 
 
+def test_status_live_brewing(client):
+    state = MagicMock()
+    state._snapshot.return_value = {
+        "state": "brewing",
+        "user": "alice",
+        "session_started_at": 1000.0,
+        "brew_started_at": 1010.0,
+    }
+    with patch("api.routers.status.kiosk.get_state", return_value=state):
+        resp = client.get("/status")
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "state": "brewing",
+        "user": "alice",
+        "session_started_at": 1000.0,
+        "brew_started_at": 1010.0,
+    }
+
+
 def test_get_user_brews(client):
     alice = db_module.get_or_create_user("alice@example.com")
     sid = db_module.start_session(alice["id"])
@@ -229,8 +249,6 @@ def test_auth_invalid_token(client, monkeypatch):
 
 
 # ── Kiosk endpoints ───────────────────────────────────────────────────────────
-
-from unittest.mock import MagicMock, patch
 
 
 def test_kiosk_logout_no_state(client):

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useKioskSocket } from './hooks/useKioskSocket'
 import { Idle } from './screens/Idle'
 import { Armed } from './screens/Armed'
@@ -13,6 +13,7 @@ export function KioskApp() {
   const [showRating, setShowRating] = useState(false)
   const prevBrewId = useRef<number | null>(null)
   const prevState = useRef<string>('')
+  const dismissRating = useCallback(() => setShowRating(false), [])
 
   // Show rating prompt when a brew completes (brewing → armed with new last_brew_id)
   useEffect(() => {
@@ -43,7 +44,7 @@ export function KioskApp() {
     <div className="relative w-screen h-screen overflow-hidden">
       {renderScreen()}
       {showRating && snapshot.state === 'armed' && (
-        <RatingPrompt snapshot={snapshot} onDismiss={() => setShowRating(false)} />
+        <RatingPrompt snapshot={snapshot} onDismiss={dismissRating} />
       )}
       {!connected && <Reconnecting />}
     </div>

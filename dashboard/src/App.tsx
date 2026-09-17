@@ -1,35 +1,30 @@
-import { useEffect, useState } from "react"
+import { lazy, Suspense } from "react"
 import { StatusBadge }  from "./components/StatusBadge"
 import { StatsCards }   from "./components/StatsCards"
 import { Leaderboard }  from "./components/Leaderboard"
-import { DailyChart }   from "./components/DailyChart"
 import { RecentBrews }  from "./components/RecentBrews"
 import { KioskApp }    from "./kiosk/KioskApp"
 import { api } from "./api"
 import { usePolling } from "./hooks/usePolling"
+import { useElapsed } from "./hooks/useElapsed"
+import { SkeletonBlock } from "./components/Skeleton"
 
-function useElapsed(startTs: number | null): string {
-  const [, setTick] = useState(0)
-  useEffect(() => {
-    if (!startTs) return
-    const id = setInterval(() => setTick(t => t + 1), 1000)
-    return () => clearInterval(id)
-  }, [startTs])
-  if (!startTs) return ""
-  const s = Math.floor(Date.now() / 1000 - startTs)
-  const m = Math.floor(s / 60)
-  const sec = s % 60
-  return m ? `${m}m ${sec}s` : `${sec}s`
-}
+const DailyChart = lazy(() =>
+  import("./components/DailyChart").then(module => ({ default: module.DailyChart })),
+)
 
 export default function App() {
   if (window.location.pathname.replace(/^\/ui/, '').startsWith('/kiosk')) {
     return <KioskApp />
   }
 
+  return <DashboardApp />
+}
+
+function DashboardApp() {
   const { data: status } = usePolling(api.status, 5000)
-  const elapsed = useElapsed(status?.session_started_at ?? null)
-  const brewing = status?.state === "brewing"
+  const elapsed = useElapsed(status?.brew_started_at ?? null)
+  const brewing = status?.state === "brewing" || status?.state === "anon_brew"
 
   return (
     <div className="min-h-screen bg-bg text-ink flex flex-col">
@@ -58,7 +53,7 @@ export default function App() {
             <span className="relative inline-flex rounded-full h-2 w-2 bg-surface" />
           </span>
           <span className="font-plex text-sm text-surface tracking-wide">
-            {status?.user} is brewing — {elapsed}
+            {status?.user ?? "Anonymous"} is brewing - {elapsed}
           </span>
         </div>
       )}
@@ -70,7 +65,9 @@ export default function App() {
             <h2 className="font-display italic text-muted text-base mb-4">Leaderboard</h2>
             <Leaderboard />
           </div>
-          <DailyChart />
+          <Suspense fallback={<SkeletonBlock className="h-[250px]" />}>
+            <DailyChart />
+          </Suspense>
         </div>
         <RecentBrews />
       </main>

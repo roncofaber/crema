@@ -16,7 +16,8 @@ Current machine state.
 {
   "state": "ready",
   "user": "alice",
-  "session_started_at": 1715000000.0
+  "session_started_at": 1715000000.0,
+  "brew_started_at": null
 }
 ```
 
@@ -147,7 +148,9 @@ Snapshot shape:
   "shot_type": "double",
   "decaf": false,
   "last_brew_id": 42,
-  "avg_rating": null
+  "avg_rating": null,
+  "session_started_at": 1715000000.0,
+  "brew_started_at": null
 }
 ```
 

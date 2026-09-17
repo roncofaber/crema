@@ -34,4 +34,5 @@ export interface Status {
   state: string
   user: string | null
   session_started_at: number | null
+  brew_started_at: number | null
 }

@@ -11,6 +11,8 @@ export type KioskSnapshot = {
   decaf: boolean
   last_brew_id: number | null
   avg_rating: number | null
+  session_started_at: number | null
+  brew_started_at: number | null
 }
 
 const DEFAULT_SNAPSHOT: KioskSnapshot = {
@@ -24,6 +26,8 @@ const DEFAULT_SNAPSHOT: KioskSnapshot = {
   decaf: false,
   last_brew_id: null,
   avg_rating: null,
+  session_started_at: null,
+  brew_started_at: null,
 }
 
 export function useKioskSocket() {
@@ -33,39 +37,46 @@ export function useKioskSocket() {
   const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const retryDelay = useRef(2000)
 
-  function connect() {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const ws = new WebSocket(`${protocol}//${window.location.host}/ws/kiosk`)
-    wsRef.current = ws
-
-    ws.onopen = () => {
-      setConnected(true)
-      retryDelay.current = 2000
-    }
-
-    ws.onmessage = (e) => {
-      try {
-        setSnapshot(JSON.parse(e.data))
-      } catch (err) {
-        console.error('Failed to parse kiosk snapshot:', err, e.data)
-      }
-    }
-
-    ws.onclose = () => {
-      setConnected(false)
-      retryRef.current = setTimeout(() => {
-        retryDelay.current = Math.min(retryDelay.current * 1.5, 15000)
-        connect()
-      }, retryDelay.current)
-    }
-
-    ws.onerror = () => ws.close()
-  }
-
   useEffect(() => {
+    let disposed = false
+
+    function connect() {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+      const ws = new WebSocket(`${protocol}//${window.location.host}/ws/kiosk`)
+      wsRef.current = ws
+
+      ws.onopen = () => {
+        if (disposed) return
+        setConnected(true)
+        retryDelay.current = 2000
+      }
+
+      ws.onmessage = (e) => {
+        if (disposed) return
+        try {
+          setSnapshot(JSON.parse(e.data))
+        } catch (err) {
+          console.error('Failed to parse kiosk snapshot:', err, e.data)
+        }
+      }
+
+      ws.onclose = () => {
+        if (disposed) return
+        setConnected(false)
+        retryRef.current = setTimeout(() => {
+          retryDelay.current = Math.min(retryDelay.current * 1.5, 15000)
+          connect()
+        }, retryDelay.current)
+      }
+
+      ws.onerror = () => ws.close()
+    }
+
     connect()
     return () => {
+      disposed = true
       if (retryRef.current) clearTimeout(retryRef.current)
+      if (wsRef.current) wsRef.current.onclose = null
       wsRef.current?.close()
     }
   }, [])

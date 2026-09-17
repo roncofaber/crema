@@ -1,4 +1,5 @@
 import time
+import sqlite3
 import pytest
 import core.db as db
 
@@ -27,6 +28,30 @@ def test_get_or_create_user_existing(test_db):
 def test_get_or_create_user_extracts_local_part(test_db):
     user = db.get_or_create_user("john.doe@company.org")
     assert user["name"] == "john.doe"
+
+
+def test_get_or_create_user_disambiguates_duplicate_local_parts(test_db):
+    first = db.get_or_create_user("alice@example.com")
+    second = db.get_or_create_user("alice@company.com")
+    assert first["name"] == "alice"
+    assert second["name"] == "alice-2"
+
+
+def test_init_db_migrates_duplicate_names(tmp_path, monkeypatch):
+    db_path = str(tmp_path / "legacy.db")
+    monkeypatch.setattr("core.db.DB_PATH", db_path)
+    with sqlite3.connect(db_path) as con:
+        con.execute("CREATE TABLE users (id INTEGER PRIMARY KEY, token TEXT UNIQUE, name TEXT NOT NULL)")
+        con.execute("INSERT INTO users VALUES (1, 'alice@example.com', 'alice')")
+        con.execute("INSERT INTO users VALUES (2, 'alice@company.com', 'alice')")
+
+    db.init_db()
+
+    with db.get_connection() as con:
+        names = [row[0] for row in con.execute("SELECT name FROM users ORDER BY id")]
+        indexes = {row[1] for row in con.execute("PRAGMA index_list(users)")}
+    assert names == ["alice", "alice-2"]
+    assert "idx_users_name" in indexes
 
 
 def test_start_session_authenticated(test_db):

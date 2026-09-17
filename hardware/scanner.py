@@ -21,8 +21,8 @@ def _readline() -> str:
 class QRScanner:
     """
     Reads QR codes from a USB HID scanner.
-    device_path=None → reads from stdin (useful for testing / dev without hardware).
-    device_path='/dev/input/eventX' → reads exclusively via evdev.
+    device_path=None automatically detects the configured scanner.
+    device_path='/dev/input/eventX' reads exclusively via evdev.
     """
 
     def __init__(self, queue: Queue, device_path: str = None):
