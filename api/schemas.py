@@ -33,6 +33,9 @@ class OverallStats(BaseModel):
     total_brew_time: float
     today_brews: int
     top_brewer: str | None
+    average_duration: float
+    average_rating: float | None
+    decaf_brews: int
 
 
 class DailyStats(BaseModel):
@@ -46,3 +49,23 @@ class Status(BaseModel):
     user: str | None
     session_started_at: float | None
     brew_started_at: float | None = None
+
+
+class DeviceHealth(BaseModel):
+    connected: bool
+    error: str | None = None
+    last_scan_at: float | None = None
+    last_read_at: float | None = None
+
+
+class KioskHealth(BaseModel):
+    running: bool
+    scanner: DeviceHealth
+    sensor: DeviceHealth
+
+
+class Health(BaseModel):
+    status: str
+    mode: str
+    database: dict[str, bool]
+    kiosk: KioskHealth

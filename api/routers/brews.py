@@ -11,7 +11,7 @@ router = APIRouter()
 def list_brews(
     user: Optional[str] = Query(None),
     kind: Optional[str] = Query(None),
-    limit: int = Query(50, le=500),
+    limit: int = Query(50, ge=1, le=500),
     from_ts: Optional[float] = Query(None),
     to_ts: Optional[float] = Query(None),
     db: sqlite3.Connection = Depends(get_db),

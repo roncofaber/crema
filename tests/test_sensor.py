@@ -94,7 +94,8 @@ def test_start_disables_sensor_when_i2c_bus_is_unavailable():
     sensor = VibrationSensor(queue.Queue())
     sys.modules["busio"].I2C.side_effect = OSError("I2C unavailable")
     try:
-        sensor.start()
+        assert sensor._connect() is False
     finally:
         sys.modules["busio"].I2C.side_effect = None
     assert sensor._accel is None
+    assert sensor.status()["connected"] is False

@@ -9,6 +9,10 @@ SERVICE_USER="$(id -un)"
 
 echo "Updating CREMA from $REPO_DIR"
 
+if [ -x "$REPO_DIR/venv/bin/crema" ] && [ -f "$REPO_DIR/data/espresso.db" ]; then
+    "$REPO_DIR/venv/bin/crema" db backup
+fi
+
 git -C "$REPO_DIR" pull
 
 cd "$REPO_DIR/dashboard"

@@ -18,10 +18,10 @@ async def kiosk_ws(websocket: WebSocket):
     await websocket.accept()
     kiosk.register_ws(websocket)
     # Send current state immediately on connect
-    state = kiosk.get_state()
-    if state is not None:
+    snapshot = kiosk.get_snapshot()
+    if snapshot is not None:
         try:
-            await websocket.send_json(state._snapshot())
+            await websocket.send_json(snapshot)
         except Exception:
             pass
     try:
@@ -69,5 +69,6 @@ def kiosk_brew_options(opts: BrewOptions):
 @router.post("/kiosk/rate", dependencies=[Depends(verify_token)])
 def kiosk_rate(req: RateRequest):
     """Submit a 1–5 star rating for a completed brew."""
-    db.rate_brew(req.brew_id, req.rating)
+    if not db.rate_brew(req.brew_id, req.rating):
+        raise HTTPException(status_code=404, detail="Brew not found")
     return {"ok": True}

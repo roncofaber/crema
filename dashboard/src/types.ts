@@ -14,6 +14,9 @@ export interface Brew {
   ended_at: number
   duration: number
   kind: string
+  shot_type: string | null
+  decaf: boolean | null
+  rating: number | null
 }
 
 export interface OverallStats {
@@ -22,6 +25,9 @@ export interface OverallStats {
   total_brew_time: number
   today_brews: number
   top_brewer: string | null
+  average_duration: number
+  average_rating: number | null
+  decaf_brews: number
 }
 
 export interface DailyStats {

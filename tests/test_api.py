@@ -83,7 +83,10 @@ def test_list_brews(client):
     user = db_module.get_or_create_user("alice@example.com")
     sid = db_module.start_session(user["id"])
     now = time_mod.time()
-    db_module.log_brew(sid, now - 30, now, "brew")
+    brew_id = db_module.log_brew(
+        sid, now - 30, now, "brew", shot_type="single", decaf=1
+    )
+    db_module.rate_brew(brew_id, 5)
     resp = client.get("/brews/")
     assert resp.status_code == 200
     data = resp.json()
@@ -122,6 +125,9 @@ def test_overall_stats_empty(client):
     assert data["total_brews"] == 0
     assert data["total_users"] == 0
     assert data["top_brewer"] is None
+    assert data["average_duration"] == 0
+    assert data["average_rating"] is None
+    assert data["decaf_brews"] == 0
 
 
 def test_overall_stats(client):
@@ -188,15 +194,48 @@ def test_status_live_brewing(client):
     }
 
 
+def test_health_api_only(client, monkeypatch):
+    monkeypatch.delenv("CREMA_START_HARDWARE", raising=False)
+    with patch("api.routers.health.kiosk.get_health", return_value={
+        "running": False,
+        "scanner": {"connected": False, "last_scan_at": None, "error": "not started"},
+        "sensor": {"connected": False, "last_read_at": None, "error": "not started"},
+    }):
+        resp = client.get("/health")
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "ok"
+    assert resp.json()["mode"] == "api-only"
+
+
+def test_health_degraded_when_hardware_missing(client, monkeypatch):
+    monkeypatch.setenv("CREMA_START_HARDWARE", "1")
+    with patch("api.routers.health.kiosk.get_health", return_value={
+        "running": True,
+        "scanner": {"connected": False, "last_scan_at": None, "error": "not found"},
+        "sensor": {"connected": True, "last_read_at": 1000.0, "error": None},
+    }):
+        resp = client.get("/health")
+    assert resp.status_code == 503
+    assert resp.json()["status"] == "degraded"
+
+
 def test_get_user_brews(client):
     alice = db_module.get_or_create_user("alice@example.com")
     sid = db_module.start_session(alice["id"])
     now = time_mod.time()
-    db_module.log_brew(sid, now - 30, now, "brew")
+    brew_id = db_module.log_brew(
+        sid, now - 30, now, "brew", shot_type="single", decaf=1
+    )
+    db_module.rate_brew(brew_id, 5)
     db_module.log_brew(sid, now - 5,  now, "noise")
     resp = client.get("/users/alice/brews")
     assert resp.status_code == 200
-    assert len(resp.json()) == 2
+    data = resp.json()
+    assert len(data) == 2
+    brew = next(item for item in data if item["kind"] == "brew")
+    assert brew["shot_type"] == "single"
+    assert brew["decaf"] is True
+    assert brew["rating"] == 5
 
 
 def test_get_user_brews_filter_kind(client):
@@ -209,6 +248,14 @@ def test_get_user_brews_filter_kind(client):
     assert resp.status_code == 200
     assert len(resp.json()) == 1
     assert resp.json()[0]["kind"] == "brew"
+
+
+def test_list_brews_rejects_nonpositive_limit(client):
+    assert client.get("/brews/?limit=0").status_code == 422
+
+
+def test_daily_stats_rejects_nonpositive_days(client):
+    assert client.get("/stats/daily?days=0").status_code == 422
 
 
 def test_delete_user(client):
@@ -294,3 +341,8 @@ def test_kiosk_rate_invalid_range(client):
 def test_kiosk_rate_invalid_range_zero(client):
     resp = client.post("/kiosk/rate", json={"brew_id": 1, "rating": 0})
     assert resp.status_code == 422
+
+
+def test_kiosk_rate_missing_brew(client):
+    resp = client.post("/kiosk/rate", json={"brew_id": 9999, "rating": 4})
+    assert resp.status_code == 404

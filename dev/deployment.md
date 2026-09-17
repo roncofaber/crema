@@ -1,4 +1,4 @@
-# CREMA — Deployment
+# CREMA - Deployment
 
 ## Target
 
@@ -10,7 +10,7 @@ Two systemd units:
 
 | Service | File | What it runs |
 |---|---|---|
-| `crema-kiosk` | `deploy/crema-kiosk.service` | `python main.py` — hardware + API in one process |
+| `crema-kiosk` | `deploy/crema-kiosk.service` | `python main.py` - hardware + API in one process |
 | `crema-browser` | `deploy/crema-browser.service` | Chromium in kiosk mode at `http://localhost:8000/kiosk` |
 
 `crema-browser` starts 5 s after `crema-kiosk` to give the API time to bind.
@@ -48,6 +48,8 @@ cd ~/crema
 ```
 
 Pulls latest code, rebuilds dashboard, reinstalls package, restarts both services.
+
+If the live database exists, the update script creates a consistent timestamped backup in `data/backups/` before pulling code.
 
 ## Environment
 
@@ -95,9 +97,15 @@ sudo systemctl restart crema-kiosk
 sudo systemctl stop crema-browser   # kill Chromium
 ```
 
+Readiness can be checked locally with:
+
+```bash
+curl --fail http://localhost:8000/health
+```
+
 ## Python dependencies (hardware-only)
 
-`adafruit-circuitpython-adxl34x` requires the Pi's I2C bus and CircuitPython board abstraction (`board`, `busio`). These are available on Pi OS but not on a development laptop. The sensor import is guarded in `hardware/sensor.py` inside `start()` so tests can run without them.
+`adafruit-circuitpython-adxl34x` requires the Pi's I2C bus and CircuitPython board abstraction (`board`, `busio`). These are available on Pi OS but not on a development laptop. The sensor imports them only when its hardware thread connects, so tests can run without them.
 
 ## Dashboard env vars (optional)
 

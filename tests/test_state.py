@@ -158,6 +158,39 @@ def test_anon_brew_end_below_threshold_logs_noise(state, test_db):
     assert row[0] == "noise"
 
 
+def test_scan_during_anonymous_brew_claims_it(state, test_db):
+    state.handle(BrewStart())
+    state.handle(QRScanned(token="claim@example.com"))
+    state.handle(brew_end(25.0))
+    assert state.state == State.ARMED
+    assert state._user["name"] == "claim"
+    assert state._brew_count == 1
+    with db.get_connection() as con:
+        row = con.execute("""
+            SELECT u.name FROM brews b
+            JOIN sessions s ON s.id = b.session_id
+            JOIN users u ON u.id = s.user_id
+        """).fetchone()
+    assert row[0] == "claim"
+
+
+def test_session_brew_time_accumulates(state):
+    state.handle(QRScanned(token="timer@example.com"))
+    state.handle(BrewStart())
+    state.handle(brew_end(25.0))
+    state.handle(BrewStart())
+    state.handle(brew_end(30.0))
+    assert state._snapshot()["session_brew_time"] == pytest.approx(55.0)
+
+
+def test_force_logout_after_brew_shows_summary(state):
+    state.handle(QRScanned(token="summary@example.com"))
+    state.handle(BrewStart())
+    state.handle(brew_end(25.0))
+    state.force_logout()
+    assert state.state == State.SUMMARY
+
+
 # -- New tests for brew options, force_logout, and broadcasts --
 
 def test_brew_options_default_double_non_decaf(state):

@@ -26,8 +26,12 @@ class VibrationSensor:
 
     def __init__(self, queue: Queue):
         self._queue = queue
-        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread = threading.Thread(target=self._run, daemon=True, name="vibration-sensor")
+        self._stop = threading.Event()
         self._accel = None
+        self._connected = False
+        self._last_read_at = None
+        self._last_error = None
 
         self._vibration_start = None   # timestamp of first high magnitude in current cycle
         self._last_valid_high = None   # timestamp of last high magnitude >= MIN_VIBRATION_PULSE
@@ -35,6 +39,10 @@ class VibrationSensor:
         self._brew_start_fired = False # whether BrewStart has been posted this cycle
 
     def start(self):
+        if not self._thread.is_alive():
+            self._thread.start()
+
+    def _connect(self) -> bool:
         try:
             import board
             import busio
@@ -42,29 +50,52 @@ class VibrationSensor:
 
             i2c = busio.I2C(board.SCL, board.SDA)
             self._accel = adafruit_adxl34x.ADXL345(i2c)
+            self._connected = True
+            self._last_error = None
+            log.info("ADXL345 connected")
+            return True
         except Exception as e:
-            log.error("ADXL345 init failed: %s - sensor disabled", e)
-            return
-        self._thread.start()
+            self._accel = None
+            self._connected = False
+            self._last_error = str(e)
+            log.error("ADXL345 init failed: %s - retrying in 5 s", e)
+            return False
 
     def stop(self):
-        pass  # daemon thread exits with process
+        self._stop.set()
+        if self._thread.is_alive():
+            self._thread.join(timeout=2)
+
+    def status(self) -> dict:
+        return {
+            "connected": self._connected,
+            "last_read_at": self._last_read_at,
+            "error": self._last_error,
+        }
 
     def _magnitude(self):
         """Read acceleration from ADXL345 and return magnitude in m/s²."""
         if self._accel is None:
-            return 0.0
+            return None
         try:
             x, y, z = self._accel.acceleration
+            self._connected = True
+            self._last_read_at = time.time()
             return math.sqrt(x * x + y * y + z * z)
-        except OSError as e:
-            log.warning("I2C read error: %s — skipping sample", e)
-            return 0.0
+        except Exception as e:
+            self._connected = False
+            self._last_error = str(e)
+            self._accel = None
+            log.warning("I2C read error: %s - reconnecting", e)
+            return None
 
     def _run(self):
-        while True:
+        while not self._stop.is_set():
+            if self._accel is None and not self._connect():
+                self._stop.wait(5)
+                continue
             self._step()
-            time.sleep(POLL_INTERVAL)
+            self._stop.wait(POLL_INTERVAL)
 
     def _step(self, magnitude=None):
         """
@@ -74,6 +105,8 @@ class VibrationSensor:
         now = time.time()
         if magnitude is None:
             magnitude = self._magnitude()
+            if magnitude is None:
+                return
 
         is_high = magnitude > ADXL_BREW_THRESHOLD
 

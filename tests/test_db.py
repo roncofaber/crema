@@ -9,7 +9,14 @@ def test_init_db_creates_tables(test_db):
         tables = {row[0] for row in con.execute(
             "SELECT name FROM sqlite_master WHERE type='table'"
         )}
-    assert {"users", "sessions", "brews"}.issubset(tables)
+    assert {"users", "sessions", "brews", "schema_migrations"}.issubset(tables)
+
+
+def test_connection_enables_sqlite_safety_settings(test_db):
+    with db.get_connection() as con:
+        assert con.execute("PRAGMA foreign_keys").fetchone()[0] == 1
+        assert con.execute("PRAGMA busy_timeout").fetchone()[0] == 5000
+        assert con.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
 
 
 def test_get_or_create_user_new(test_db):
@@ -52,6 +59,21 @@ def test_init_db_migrates_duplicate_names(tmp_path, monkeypatch):
         indexes = {row[1] for row in con.execute("PRAGMA index_list(users)")}
     assert names == ["alice", "alice-2"]
     assert "idx_users_name" in indexes
+
+
+def test_backup_and_restore_database(test_db, tmp_path):
+    user = db.get_or_create_user("backup@example.com")
+    backup_path = str(tmp_path / "backup.db")
+    assert db.backup_database(backup_path) == backup_path
+    assert db.integrity_check(backup_path) == ["ok"]
+
+    with db.get_connection() as con:
+        con.execute("DELETE FROM users WHERE id=?", (user["id"],))
+    db.restore_database(backup_path)
+
+    with db.get_connection() as con:
+        restored = con.execute("SELECT token FROM users WHERE id=?", (user["id"],)).fetchone()
+    assert restored[0] == "backup@example.com"
 
 
 def test_start_session_authenticated(test_db):
@@ -144,12 +166,19 @@ def test_rate_brew(test_db):
     session_id = db.start_session(user["id"])
     t = time.time()
     brew_id = db.log_brew(session_id, t, t + 25.0, "brew")
-    db.rate_brew(brew_id, 4)
+    assert db.rate_brew(brew_id, 4) is True
     with db.get_connection() as con:
         row = con.execute(
             "SELECT rating FROM brews WHERE id=?", (brew_id,)
         ).fetchone()
     assert row[0] == 4
+
+
+def test_rate_brew_rejects_missing_and_noise(test_db):
+    now = time.time()
+    noise_id = db.log_brew(None, now, now + 3, "noise")
+    assert db.rate_brew(noise_id, 4) is False
+    assert db.rate_brew(9999, 4) is False
 
 
 def test_get_session_avg_rating_no_ratings(test_db):

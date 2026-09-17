@@ -1,4 +1,4 @@
-# CREMA — Kiosk UI
+# CREMA - Kiosk UI
 
 The kiosk UI runs at `/kiosk` in Chromium, full-screen on the 5" DSI touchscreen (800×480).
 
@@ -11,7 +11,7 @@ if (window.location.pathname.startsWith('/kiosk')) return <KioskApp />
 // else: dashboard
 ```
 
-No router library — simple path check.
+No router library is needed because path selection is simple.
 
 ## File layout
 
@@ -27,6 +27,7 @@ dashboard/src/kiosk/
     AnonBrewing.tsx         Brew without a user
     Summary.tsx             End-of-session summary
   overlays/
+    HardwareWarning.tsx      Non-blocking scanner and sensor status
     RatingPrompt.tsx        1–5 star rating (auto-dismiss 15 s)
     Reconnecting.tsx        Shown when WebSocket is disconnected
 ```
@@ -41,6 +42,7 @@ const { snapshot, connected } = useKioskSocket()
 - Receives `KioskSnapshot` JSON on every server push
 - Exponential backoff reconnect: 2 s → ×1.5 → 15 s cap
 - `connected: false` triggers `<Reconnecting />` overlay
+- Connected snapshots with unavailable hardware trigger `<HardwareWarning />`
 
 `KioskSnapshot` type:
 ```ts
@@ -48,6 +50,7 @@ const { snapshot, connected } = useKioskSocket()
   state: "idle" | "armed" | "brewing" | "anon_brew" | "summary"
   user: string | null
   brew_count: number
+  session_brew_time: number
   time_remaining: number | null   // null except in ARMED
   timeout: number | null          // null except in ARMED
   elapsed: number | null          // null except in BREWING/ANON_BREW
@@ -57,6 +60,7 @@ const { snapshot, connected } = useKioskSocket()
   avg_rating: number | null       // non-null in SUMMARY
   session_started_at: number | null
   brew_started_at: number | null
+  hardware: KioskHardware | null
 }
 ```
 
@@ -66,11 +70,11 @@ Most complex screen. Layout:
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
-│  Left 60%                          Right 40%                              │
+│  Left 40%                          Right 60%                              │
 │  ─────────────────────────         ─────────────────────────              │
 │  [Playfair italic] alice           [SINGLE] [DOUBLE]                      │
-│  2 brews · start the machine       [REGULAR] [DECAF]                      │
-│                                    [Logout]                               │
+│  2 coffees this session            [OFF] [ON]                             │
+│                                    [Finish session]                       │
 ├──────────────────────────────────────────────────────────────────────────┤
 │  ████████████████░░░░░░░░  timeout bar (animated, ARMED_TIMEOUT / SESSION)│
 └──────────────────────────────────────────────────────────────────────────┘
@@ -83,7 +87,7 @@ Brew options (shot type, decaf) are adjustable during `BREWING` as well.
 ## Overlay: RatingPrompt
 
 Triggered in `KioskApp.tsx` when:
-1. State transitions from `brewing` → `armed`
+1. State transitions from `brewing` or `anon_brew` to `armed`
 2. `last_brew_id` changes (new brew completed)
 
 Behaviour:
@@ -91,13 +95,17 @@ Behaviour:
 - 15 s countdown → auto-dismiss
 - On tap: calls `api.kioskRate(last_brew_id, rating)` → dismiss
 
+## Overlay: HardwareWarning
+
+The top-right warning lists the scanner, sensor, or both when they are unavailable. It uses a lower stacking layer than reconnecting and rating overlays, and it must not cover controls at 800 x 480.
+
 ## Design tokens
 
 Matches the dashboard:
 - **Font display**: Playfair Display (italic for user names)
 - **Font mono**: IBM Plex Mono (times, counters)
 - **Font body**: DM Sans
-- **Palette**: warm cream — `crema-50` … `crema-900`, `surface`, `border`, `faint`
+- **Palette**: warm cream from `crema-50` through `crema-900`, plus `surface`, `border`, and `faint`
 
 All defined in `dashboard/tailwind.config.js`.
 

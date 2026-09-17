@@ -7,6 +7,7 @@ import { AnonBrewing } from './screens/AnonBrewing'
 import { Summary } from './screens/Summary'
 import { RatingPrompt } from './overlays/RatingPrompt'
 import { Reconnecting } from './overlays/Reconnecting'
+import { HardwareWarning } from './overlays/HardwareWarning'
 
 export function KioskApp() {
   const { snapshot, connected } = useKioskSocket()
@@ -18,7 +19,7 @@ export function KioskApp() {
   // Show rating prompt when a brew completes (brewing → armed with new last_brew_id)
   useEffect(() => {
     if (
-      prevState.current === 'brewing' &&
+      (prevState.current === 'brewing' || prevState.current === 'anon_brew') &&
       snapshot.state === 'armed' &&
       snapshot.last_brew_id != null &&
       snapshot.last_brew_id !== prevBrewId.current
@@ -46,6 +47,7 @@ export function KioskApp() {
       {showRating && snapshot.state === 'armed' && (
         <RatingPrompt snapshot={snapshot} onDismiss={dismissRating} />
       )}
+      {connected && <HardwareWarning hardware={snapshot.hardware} />}
       {!connected && <Reconnecting />}
     </div>
   )

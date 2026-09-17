@@ -63,7 +63,7 @@ def update_user(name: str, body: UserUpdate, db: sqlite3.Connection = Depends(ge
 def get_user_brews(
     name: str,
     kind: str | None = Query(None),
-    limit: int = Query(50, le=500),
+    limit: int = Query(50, ge=1, le=500),
     db: sqlite3.Connection = Depends(get_db),
 ):
     user = db.execute("SELECT id FROM users WHERE name = ?", (name,)).fetchone()
@@ -78,7 +78,8 @@ def get_user_brews(
     params.append(limit)
 
     rows = db.execute(f"""
-        SELECT b.id, u.name AS user, b.started_at, b.ended_at, b.duration, b.kind
+        SELECT b.id, u.name AS user, b.started_at, b.ended_at, b.duration, b.kind,
+               b.shot_type, CAST(b.decaf AS INTEGER) AS decaf, b.rating
         FROM brews b
         JOIN sessions s ON b.session_id = s.id
         JOIN users u    ON s.user_id    = u.id
@@ -86,7 +87,11 @@ def get_user_brews(
         ORDER BY b.started_at DESC
         LIMIT ?
     """, params).fetchall()
-    return [dict(r) for r in rows]
+    result = [dict(r) for r in rows]
+    for brew in result:
+        if brew["decaf"] is not None:
+            brew["decaf"] = bool(brew["decaf"])
+    return result
 
 
 @router.delete("/{name}", status_code=204)

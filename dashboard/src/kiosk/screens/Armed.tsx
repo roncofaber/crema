@@ -70,7 +70,7 @@ export function Armed({ snapshot }: Props) {
             onClick={() => api.kioskLogout().catch(console.error)}
             className="py-4 rounded text-sm uppercase tracking-[0.16em] text-faint border border-border bg-transparent"
           >
-            Logout
+            {brew_count ? 'Finish session' : 'Cancel session'}
           </button>
         </div>
       </div>

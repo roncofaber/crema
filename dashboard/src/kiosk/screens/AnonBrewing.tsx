@@ -21,6 +21,7 @@ export function AnonBrewing({ snapshot }: Props) {
         <p className="font-plex text-sm uppercase tracking-[0.18em] text-faint">Anonymous</p>
         <p className="font-display text-8xl text-ink leading-none">×1</p>
         <p className="font-plex text-2xl text-crema-400 tracking-wide">{fmt(elapsed)}</p>
+        <p className="font-plex text-sm text-muted tracking-wide">Scan now to claim this brew</p>
         <div className="w-2/3 h-1.5 bg-border-subtle rounded-full overflow-hidden mt-2">
           <div className="h-full bg-crema-400 rounded-full transition-all duration-1000" style={{ width: `${fill * 100}%` }} />
         </div>

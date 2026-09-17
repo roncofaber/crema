@@ -4,6 +4,7 @@ export type KioskSnapshot = {
   state: 'idle' | 'armed' | 'brewing' | 'anon_brew' | 'summary'
   user: string | null
   brew_count: number
+  session_brew_time: number
   time_remaining: number | null
   timeout: number | null
   elapsed: number | null
@@ -13,12 +14,18 @@ export type KioskSnapshot = {
   avg_rating: number | null
   session_started_at: number | null
   brew_started_at: number | null
+  hardware: {
+    running: boolean
+    scanner: { connected: boolean; error: string | null; last_scan_at: number | null }
+    sensor: { connected: boolean; error: string | null; last_read_at: number | null }
+  } | null
 }
 
 const DEFAULT_SNAPSHOT: KioskSnapshot = {
   state: 'idle',
   user: null,
   brew_count: 0,
+  session_brew_time: 0,
   time_remaining: null,
   timeout: null,
   elapsed: null,
@@ -28,6 +35,7 @@ const DEFAULT_SNAPSHOT: KioskSnapshot = {
   avg_rating: null,
   session_started_at: null,
   brew_started_at: null,
+  hardware: null,
 }
 
 export function useKioskSocket() {

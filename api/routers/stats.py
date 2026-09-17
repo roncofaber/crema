@@ -21,7 +21,10 @@ def overall_stats(db: sqlite3.Connection = Depends(get_db)):
             COUNT(CASE WHEN b.kind = 'brew' THEN 1 END)                          AS total_brews,
             COUNT(DISTINCT CASE WHEN b.kind = 'brew' THEN s.user_id END)          AS total_users,
             COALESCE(SUM(CASE WHEN b.kind = 'brew' THEN b.duration END), 0)       AS total_brew_time,
-            COUNT(CASE WHEN b.kind = 'brew' AND b.started_at >= ? THEN 1 END)     AS today_brews
+            COUNT(CASE WHEN b.kind = 'brew' AND b.started_at >= ? THEN 1 END)     AS today_brews,
+            COALESCE(AVG(CASE WHEN b.kind = 'brew' THEN b.duration END), 0)       AS average_duration,
+            AVG(CASE WHEN b.kind = 'brew' THEN b.rating END)                      AS average_rating,
+            COUNT(CASE WHEN b.kind = 'brew' AND b.decaf = 1 THEN 1 END)           AS decaf_brews
         FROM brews b
         LEFT JOIN sessions s ON b.session_id = s.id
     """, (today,)).fetchone()
@@ -43,11 +46,14 @@ def overall_stats(db: sqlite3.Connection = Depends(get_db)):
         "total_brew_time": row["total_brew_time"],
         "today_brews":     row["today_brews"],
         "top_brewer":      top["name"] if top else None,
+        "average_duration": row["average_duration"],
+        "average_rating":   row["average_rating"],
+        "decaf_brews":      row["decaf_brews"],
     }
 
 
 @router.get("/daily", response_model=list[DailyStats])
-def daily_stats(days: int = Query(30, le=365), db: sqlite3.Connection = Depends(get_db)):
+def daily_stats(days: int = Query(30, ge=1, le=365), db: sqlite3.Connection = Depends(get_db)):
     since = time.time() - days * 86400
     rows = db.execute("""
         SELECT

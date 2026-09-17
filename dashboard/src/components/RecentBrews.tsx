@@ -47,6 +47,8 @@ export function RecentBrews() {
             <th className="text-left px-4 py-2 text-xs uppercase tracking-widest text-faint font-normal">User</th>
             <th className="text-left px-4 py-2 text-xs uppercase tracking-widest text-faint font-normal">When</th>
             <th className="text-right px-4 py-2 text-xs uppercase tracking-widest text-faint font-normal">Duration</th>
+            <th className="hidden md:table-cell text-right px-4 py-2 text-xs uppercase tracking-widest text-faint font-normal">Shot</th>
+            <th className="hidden md:table-cell text-right px-4 py-2 text-xs uppercase tracking-widest text-faint font-normal">Rating</th>
             {showNoise && (
               <th className="text-right px-4 py-2 text-xs uppercase tracking-widest text-faint font-normal">Kind</th>
             )}
@@ -54,7 +56,7 @@ export function RecentBrews() {
         </thead>
         <tbody>
           {brews == null
-            ? Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} cols={showNoise ? 4 : 3} />)
+            ? Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} cols={showNoise ? 6 : 5} />)
             : brews.map(b => (
                 <tr
                   key={b.id}
@@ -63,6 +65,12 @@ export function RecentBrews() {
                   <td className="px-4 py-3 text-ink font-medium">{b.user}</td>
                   <td className="px-4 py-3 font-plex text-xs text-faint">{relTime(b.started_at)}</td>
                   <td className="px-4 py-3 text-right font-plex text-xs text-muted">{fmtDuration(b.duration)}</td>
+                  <td className="hidden md:table-cell px-4 py-3 text-right font-plex text-xs text-muted">
+                    {b.shot_type ? `${b.shot_type}${b.decaf ? ' decaf' : ''}` : '-'}
+                  </td>
+                  <td className="hidden md:table-cell px-4 py-3 text-right font-plex text-xs text-crema-400">
+                    {b.rating == null ? '-' : `${b.rating} / 5`}
+                  </td>
                   {showNoise && (
                     <td className={`px-4 py-3 text-right font-plex text-xs ${b.kind === "brew" ? "text-crema-400" : "text-faint"}`}>
                       {b.kind}

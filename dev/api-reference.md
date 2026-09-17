@@ -1,8 +1,31 @@
-# CREMA — API Reference
+# CREMA - API Reference
 
 Base URL: `http://<pi>:8000`
 
-Auth: `Authorization: Bearer <CREMA_API_TOKEN>` on all REST endpoints when the env var is set.
+Auth: `Authorization: Bearer <CREMA_API_TOKEN>` on data and control REST endpoints when the env var is set. `/`, `/health`, and `/ws/kiosk` remain public.
+
+---
+
+## Health
+
+### `GET /health`
+
+Reports database connectivity, process mode, kiosk loop state, and scanner and sensor connectivity. This endpoint does not require authentication so service monitors can use it.
+
+Returns HTTP 200 with `status: "ok"` when ready. In hardware mode, a stopped kiosk loop or disconnected device returns HTTP 503 with `status: "degraded"`.
+
+```json
+{
+  "status": "ok",
+  "mode": "hardware",
+  "database": {"connected": true},
+  "kiosk": {
+    "running": true,
+    "scanner": {"connected": true, "error": null},
+    "sensor": {"connected": true, "error": null}
+  }
+}
+```
 
 ---
 
@@ -58,13 +81,15 @@ Brews for one user. Accepts `?kind=brew` filter.
 ### `GET /brews/`
 
 Recent brews. Query params:
-- `limit` (default 20)
-- `kind` (default `"brew"`, pass empty string to get all)
-- `user` — filter by user name
+
+- `limit` (default 50, range 1 to 500)
+- `kind` (optional, typically `"brew"` or `"noise"`)
+- `user` - filter by user name
+- `from_ts` and `to_ts` (optional Unix timestamps)
 
 ```json
 [{"id": 1, "user": "alice", "kind": "brew", "duration": 28.4,
-  "shot_type": "double", "decaf": 0, "rating": 4,
+  "shot_type": "double", "decaf": false, "rating": 4,
   "started_at": 1715000000.0, "ended_at": 1715000028.4}]
 ```
 
@@ -77,7 +102,8 @@ Recent brews. Query params:
 Overall totals.
 
 ```json
-{"total_brews": 42, "total_users": 5, "top_brewer": "alice"}
+{"total_brews": 42, "total_users": 5, "total_brew_time": 1176.0, "today_brews": 6,
+ "top_brewer": "alice", "average_duration": 28.0, "average_rating": 4.3, "decaf_brews": 5}
 ```
 
 ### `GET /stats/daily?days=30`
@@ -90,7 +116,7 @@ Per-day brew counts (last N days, default 30).
 
 ---
 
-## Kiosk — REST
+## Kiosk - REST
 
 These endpoints control the live kiosk and require auth when `CREMA_API_TOKEN` is set.
 
@@ -124,11 +150,11 @@ Body:
 {"brew_id": 42, "rating": 4}
 ```
 
-`422` if `rating` is outside 1–5.
+`404` if the brew does not exist or is a noise event. `422` if `rating` is outside 1 to 5.
 
 ---
 
-## Kiosk — WebSocket
+## Kiosk - WebSocket
 
 ### `WS /ws/kiosk`
 
@@ -142,6 +168,7 @@ Snapshot shape:
   "state": "armed",
   "user": "alice",
   "brew_count": 2,
+  "session_brew_time": 54.2,
   "time_remaining": 87.3,
   "timeout": 120.0,
   "elapsed": null,
@@ -150,8 +177,13 @@ Snapshot shape:
   "last_brew_id": 42,
   "avg_rating": null,
   "session_started_at": 1715000000.0,
-  "brew_started_at": null
+  "brew_started_at": null,
+  "hardware": {
+    "running": true,
+    "scanner": {"connected": true, "error": null, "last_scan_at": 1715000000.0},
+    "sensor": {"connected": true, "error": null, "last_read_at": 1715000028.4}
+  }
 }
 ```
 
-The client should keep the connection open (send nothing; server ignores incoming messages). Implement exponential backoff reconnect — see `dashboard/src/kiosk/hooks/useKioskSocket.ts` for a reference implementation (2 s initial, ×1.5 multiplier, 15 s cap).
+The client should keep the connection open (send nothing; server ignores incoming messages). Implement exponential backoff reconnect; see `dashboard/src/kiosk/hooks/useKioskSocket.ts` for a reference implementation (2 s initial, ×1.5 multiplier, 15 s cap).

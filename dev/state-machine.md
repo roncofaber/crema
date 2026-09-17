@@ -1,4 +1,4 @@
-# CREMA — State Machine
+# CREMA - State Machine
 
 Implemented in `core/state.py` as `SessionState`.
 
@@ -22,13 +22,16 @@ ARMED ──BrewStart─────────────────► BREW
 ARMED ──timeout (ARMED_TIMEOUT)───► IDLE          (if no brew yet)
 ARMED ──timeout (SESSION_TIMEOUT)─► SUMMARY       (after last brew)
 ARMED ──QRScanned (other user)────► ARMED         (handoff)
-ARMED ──force_logout()────────────► IDLE
+ARMED ──force_logout(), no brews──► IDLE
+ARMED ──force_logout(), has brews─► SUMMARY
 
 BREWING ──BrewEnd─────────────────► ARMED
 BREWING ──BrewEnd + pending QR────► ARMED         (handoff after brew)
 BREWING ──QRScanned───────────────── (queued, applied on BrewEnd)
 
 ANON_BREW ──BrewEnd───────────────► IDLE
+ANON_BREW ──BrewEnd + pending QR──► ARMED         (claim completed brew)
+ANON_BREW ──QRScanned─────────────── (claim queued, applied on BrewEnd)
 
 SUMMARY ──SUMMARY_DURATION elapsed► IDLE
 ```
@@ -77,6 +80,7 @@ In `ARMED` state, `on_tick()` runs the timer at 1 Hz:
   "state": "armed",
   "user": "alice",
   "brew_count": 2,
+  "session_brew_time": 54.2,
   "time_remaining": 87.3,
   "timeout": 120.0,
   "elapsed": null,
@@ -91,6 +95,7 @@ In `ARMED` state, `on_tick()` runs the timer at 1 Hz:
 
 `time_remaining` and `timeout` are `null` in all states except `ARMED`.
 `elapsed` is non-null only in `BREWING` / `ANON_BREW`.
+`session_brew_time` is the total duration of completed brews in the active session.
 `last_brew_id` is `null` if no brew in this session yet (or if the brew was noise).
 `avg_rating` is non-null only in `SUMMARY`.
 `session_started_at` is set for authenticated sessions. `brew_started_at` is set while a brew is active.

@@ -1,13 +1,13 @@
 # CREMA
 
-Coffee Realtime Event Monitoring Application — the kiosk and dashboard for **Caffè Cabrini**.
+Coffee Realtime Event Monitoring Application - the kiosk and dashboard for **Caffè Cabrini**.
 
 A Raspberry Pi kiosk that tracks who makes espresso, how many shots, and for how long. Users scan a QR code (email) before using the machine; an accelerometer detects each brew cycle and logs it to SQLite. A web dashboard shows live stats, a leaderboard, and recent brews. A touch UI on the 5" kiosk display lets users control shot type, decaf, and rate their brew.
 
 ## Hardware
 
 - Raspberry Pi 4
-- FREENOVE 5" MIPI DSI touchscreen (800×480, capacitive touch) — driver-free, plug-and-play
+- FREENOVE 5" MIPI DSI touchscreen (800×480, capacitive touch) - driver-free, plug-and-play
 - ADXL345 3-axis accelerometer (GY-291) via I2C
 - MINJCODE MJ2818A USB HID QR code scanner
 
@@ -20,6 +20,8 @@ pip install -e .
 ```
 
 The scanner is detected automatically by device name. The database is created at `data/espresso.db` on first run. Enable I2C (`raspi-config` then Interface Options then I2C) before running on the Pi.
+
+For API-only local development, frontend setup, isolated test databases, and verification commands, see [`dev/development.md`](dev/development.md).
 
 ## CLI
 
@@ -44,10 +46,10 @@ Starts the FastAPI server. The React dashboard is served at `/ui`; the kiosk tou
 
 ### `crema sensor`
 
-Live terminal readout of the ADXL345 accelerometer — useful for calibrating `ADXL_BREW_THRESHOLD`:
+Live terminal readout of the ADXL345 accelerometer - useful for calibrating `ADXL_BREW_THRESHOLD`:
 
 ```
-ADXL345 — live readout  (Ctrl+C to quit)
+ADXL345 - live readout  (Ctrl+C to quit)
 ───────────────────────────────────────────
   X: +0.123  Y: -9.812  Z: +1.045 m/s²  mag: 9.899  peak:12.341  [ACTIVE]  [████████░░░░░░░░░░░░░░░░░░░░]
 ```
@@ -74,7 +76,15 @@ crema users delete <name>
 
 ### `crema db`
 
-Database initialisation and migration utilities.
+Database maintenance utilities:
+
+```bash
+crema db backup [OUTPUT]
+crema db check [DATABASE]
+crema db restore BACKUP
+crema db export [OUTPUT]
+crema db reclassify
+```
 
 ## API
 
@@ -83,6 +93,7 @@ FastAPI server at port 8000. Full reference: [`dev/api-reference.md`](dev/api-re
 | Path | Description |
 |---|---|
 | `GET /` | Health check |
+| `GET /health` | Database and hardware readiness |
 | `GET /status` | Current machine state and active user |
 | `GET /brews/` | Recent brew records |
 | `GET /stats/` | Aggregate totals |
@@ -95,11 +106,11 @@ FastAPI server at port 8000. Full reference: [`dev/api-reference.md`](dev/api-re
 | `/ui` | React dashboard (SPA) |
 | `/kiosk` | Touch kiosk UI (SPA) |
 
-**Authentication:** set `CREMA_API_TOKEN` in the service environment. When building the browser UI, set `VITE_API_TOKEN` to the same value or export `CREMA_API_TOKEN` before running the deployment scripts. All REST routes then require `Authorization: Bearer <token>`. The WebSocket has no auth. Browser tokens are visible to users, so use this mode only on a trusted local network.
+**Authentication:** set `CREMA_API_TOKEN` in the service environment. When building the browser UI, set `VITE_API_TOKEN` to the same value or export `CREMA_API_TOKEN` before running the deployment scripts. Data and control REST routes then require `Authorization: Bearer <token>`; `/`, `/health`, and the WebSocket remain public. Browser tokens are visible to users, so use this mode only on a trusted local network.
 
 ## Dashboard
 
-The React dashboard at `/ui` auto-refreshes every 5 seconds and shows:
+The React dashboard at `/ui` refreshes live data periodically and shows:
 
 - Live brewing strip when the machine is active
 - Stats cards (total brews, total time, users)
@@ -114,7 +125,7 @@ The kiosk UI at `/kiosk` runs full-screen on the 5" DSI touchscreen via Chromium
 - **Idle**: waiting for QR scan
 - **Armed**: user name, brew count, shot type / decaf toggles, logout button, session timeout bar
 - **Brewing**: brew counter, elapsed time, progress bar, adjustable shot type / decaf
-- **Summary**: session summary with average brew rating
+- **Summary**: session brew count, brew time, and average rating
 - **Rating prompt**: 1–5 stars after each brew (auto-dismisses after 15 s)
 
 ## Deployment
@@ -154,32 +165,36 @@ dashboard/    React + Vite frontend (dashboard + kiosk UI)
 deploy/       systemd service files and install/update scripts
 dev/          Developer documentation (architecture, FSM, API, hardware)
 hardware/     QR scanner and ADXL345 accelerometer drivers
-tests/        pytest suite (81 tests)
+tests/        pytest suite
 config.py     all tuneable constants
-main.py       entry point — hardware + API in one process
+main.py       entry point - hardware + API in one process
 ```
 
 ## Configuration
 
-All thresholds and timeouts are in `config.py`.
+Configuration defaults live in `config.py` and can be overridden through environment variables.
 
-| Constant | Default | Description |
+| Environment variable | Default | Description |
 |---|---|---|
-| `ADXL_BREW_THRESHOLD` | 11.5 m/s² | Magnitude above this = machine active |
-| `ADXL_SAMPLE_RATE` | 50 Hz | Accelerometer polling rate |
-| `MIN_BREW_DURATION` | 10 s | Below this, vibration logged as noise |
-| `BREW_END_SILENCE` | 10 s | Silence needed to end a brew cycle |
-| `MIN_VIBRATION_PULSE` | 0.5 s | Minimum HIGH pulse to reset silence timer |
-| `BREW_CONFIRM_WINDOW` | 2 s | Sustained vibration before BrewStart fires |
-| `ARMED_TIMEOUT` | 120 s | Time to wait for machine after scan (no brew yet) |
-| `SESSION_TIMEOUT` | 300 s | Idle time after last brew before auto-logout |
-| `SUMMARY_DURATION` | 5 s | Summary screen shown after session ends |
+| `CREMA_ADXL_BREW_THRESHOLD` | 11.5 m/s² | Magnitude above this = machine active |
+| `CREMA_ADXL_SAMPLE_RATE` | 50 Hz | Accelerometer polling rate |
+| `CREMA_MIN_BREW_DURATION` | 10 s | Below this, vibration logged as noise |
+| `CREMA_BREW_END_SILENCE` | 10 s | Silence needed to end a brew cycle |
+| `CREMA_MIN_VIBRATION_PULSE` | 0.5 s | Minimum high pulse to reset the silence timer |
+| `CREMA_BREW_CONFIRM_WINDOW` | 2 s | Sustained vibration before BrewStart fires |
+| `CREMA_ARMED_TIMEOUT` | 120 s | Time to wait for the machine after scanning |
+| `CREMA_SESSION_TIMEOUT` | 300 s | Idle time after the last brew |
+| `CREMA_SUMMARY_DURATION` | 5 s | Summary screen duration |
+| `CREMA_SCANNER_DEVICE_NAME` | MINJCODE device name | USB scanner name |
+| `CREMA_DB_PATH` | `data/espresso.db` | SQLite database path |
+| `CREMA_BACKUP_DIR` | `data/backups` | Automatic backup directory |
 
 ## Further reading
 
-- [`dev/architecture.md`](dev/architecture.md) — process model, module map, sync/async bridge
-- [`dev/state-machine.md`](dev/state-machine.md) — FSM states, transitions, snapshot payload
-- [`dev/api-reference.md`](dev/api-reference.md) — all REST and WebSocket endpoints
-- [`dev/hardware.md`](dev/hardware.md) — wiring, calibration, sensor driver internals
-- [`dev/kiosk-ui.md`](dev/kiosk-ui.md) — React kiosk UI, screens, WebSocket hook
-- [`dev/deployment.md`](dev/deployment.md) — systemd services, install, env vars
+- [`dev/architecture.md`](dev/architecture.md) - process model, module map, sync/async bridge
+- [`dev/development.md`](dev/development.md) - local setup, API-only mode, tests, and visual checks
+- [`dev/state-machine.md`](dev/state-machine.md) - FSM states, transitions, snapshot payload
+- [`dev/api-reference.md`](dev/api-reference.md) - all REST and WebSocket endpoints
+- [`dev/hardware.md`](dev/hardware.md) - wiring, calibration, sensor driver internals
+- [`dev/kiosk-ui.md`](dev/kiosk-ui.md) - React kiosk UI, screens, WebSocket hook
+- [`dev/deployment.md`](dev/deployment.md) - systemd services, install, env vars

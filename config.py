@@ -1,29 +1,35 @@
+import os
+from pathlib import Path
+
+
+def _float(name: str, default: float) -> float:
+    return float(os.getenv(name, default))
+
+
+def _int(name: str, default: int) -> int:
+    return int(os.getenv(name, default))
+
+
+_ROOT = Path(__file__).resolve().parent
+
 # ADXL345 accelerometer
-ADXL_BREW_THRESHOLD = 11.5   # m/s² magnitude — tune with `crema sensor`
-ADXL_SAMPLE_RATE    = 50     # Hz polling rate
-ADXL_RANGE          = 4      # ±4g range setting
+ADXL_BREW_THRESHOLD = _float("CREMA_ADXL_BREW_THRESHOLD", 11.5)
+ADXL_SAMPLE_RATE = _int("CREMA_ADXL_SAMPLE_RATE", 50)
 
 # Vibration thresholds
-MIN_BREW_DURATION    = 10   # seconds — below this → kind='noise'
-BREW_END_SILENCE     = 10   # seconds of silence before BrewEnd fires
-MIN_VIBRATION_PULSE  = 0.5  # seconds — minimum HIGH pulse to reset silence timer
-BREW_CONFIRM_WINDOW  = 2    # seconds of sustained vibration before BrewStart fires
+MIN_BREW_DURATION = _float("CREMA_MIN_BREW_DURATION", 10)
+BREW_END_SILENCE = _float("CREMA_BREW_END_SILENCE", 10)
+MIN_VIBRATION_PULSE = _float("CREMA_MIN_VIBRATION_PULSE", 0.5)
+BREW_CONFIRM_WINDOW = _float("CREMA_BREW_CONFIRM_WINDOW", 2)
 
 # Session timeouts
-ARMED_TIMEOUT   = 120   # seconds waiting for machine after scan (no brew yet)
-SESSION_TIMEOUT = 300   # seconds of inactivity after last brew before auto-logout
-SUMMARY_DURATION = 5    # seconds to display summary screen before returning to idle
-
-# Display
-DISPLAY_WIDTH    = 320
-DISPLAY_HEIGHT   = 240
-FONT_PATH        = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-FONT_SIZE_SMALL  = 20
-FONT_SIZE_LARGE  = 40
+ARMED_TIMEOUT = _float("CREMA_ARMED_TIMEOUT", 120)
+SESSION_TIMEOUT = _float("CREMA_SESSION_TIMEOUT", 300)
+SUMMARY_DURATION = _float("CREMA_SUMMARY_DURATION", 5)
 
 # Hardware
-SCANNER_DEVICE_NAME = "MINJCODE MINJCODE MJ2818A"
+SCANNER_DEVICE_NAME = os.getenv("CREMA_SCANNER_DEVICE_NAME", "MINJCODE MINJCODE MJ2818A")
 
 # Database
-import os as _os
-DB_PATH = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "data", "espresso.db")
+DB_PATH = os.getenv("CREMA_DB_PATH", str(_ROOT / "data" / "espresso.db"))
+BACKUP_DIR = os.getenv("CREMA_BACKUP_DIR", str(_ROOT / "data" / "backups"))

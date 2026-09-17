@@ -1,7 +1,7 @@
 import logging
 import re
 import threading
-import sys
+import time
 from queue import Queue
 from core.events import QRScanned
 
@@ -14,10 +14,6 @@ def _is_email(token: str) -> bool:
     return bool(_EMAIL_RE.match(token.strip()))
 
 
-def _readline() -> str:
-    return sys.stdin.readline().strip()
-
-
 class QRScanner:
     """
     Reads QR codes from a USB HID scanner.
@@ -27,11 +23,34 @@ class QRScanner:
 
     def __init__(self, queue: Queue, device_path: str = None):
         self._queue       = queue
-        self._device_path = device_path
-        self._thread      = threading.Thread(target=self._run, daemon=True)
+        self._configured_path = device_path
+        self._device = None
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, daemon=True, name="qr-scanner")
+        self._connected = False
+        self._last_scan_at = None
+        self._last_error = None
 
     def start(self):
-        self._thread.start()
+        if not self._thread.is_alive():
+            self._thread.start()
+
+    def stop(self):
+        self._stop.set()
+        if self._device is not None:
+            try:
+                self._device.close()
+            except Exception:
+                pass
+        if self._thread.is_alive():
+            self._thread.join(timeout=2)
+
+    def status(self) -> dict:
+        return {
+            "connected": self._connected,
+            "last_scan_at": self._last_scan_at,
+            "error": self._last_error,
+        }
 
     def _find_device_path(self) -> str | None:
         from evdev import InputDevice, list_devices
@@ -46,28 +65,36 @@ class QRScanner:
         return None
 
     def _run(self):
-        import time
-        while True:
-            path = self._device_path or self._find_device_path()
-            if path:
-                log.info("scanner opened: %s", path)
-                self._device_path = path
-                self._run_evdev()
-                log.warning("scanner disconnected, retrying in 5 s...")
-                self._device_path = None
-            else:
-                log.debug("scanner not found, retrying in 5 s...")
-            time.sleep(5)
-
-    def _run_stdin(self):
-        while True:
+        while not self._stop.is_set():
             try:
-                raw = _readline()
-                self._handle_raw(raw)
-            except EOFError:
-                break
+                path = self._configured_path or self._find_device_path()
+                if path:
+                    log.info("scanner opened: %s", path)
+                    self._run_evdev(path)
+                    if not self._stop.is_set():
+                        log.warning("scanner disconnected, retrying in 5 s")
+                else:
+                    self._last_error = "scanner not found"
+                    log.debug("scanner not found, retrying in 5 s")
+            except Exception as exc:
+                self._last_error = str(exc)
+                if not self._stop.is_set():
+                    log.warning("scanner error: %s", exc)
+            finally:
+                self._connected = False
+                if self._device is not None:
+                    try:
+                        self._device.ungrab()
+                    except Exception:
+                        pass
+                    try:
+                        self._device.close()
+                    except Exception:
+                        pass
+                self._device = None
+            self._stop.wait(5)
 
-    def _run_evdev(self):
+    def _run_evdev(self, path: str):
         from evdev import InputDevice, categorize, ecodes, KeyEvent
 
         _KEYMAP = {
@@ -83,8 +110,11 @@ class QRScanner:
         }
         _SHIFT_KEYS = {"KEY_LEFTSHIFT", "KEY_RIGHTSHIFT"}
 
-        device  = InputDevice(self._device_path)
+        device = InputDevice(path)
+        self._device = device
         device.grab()
+        self._connected = True
+        self._last_error = None
         buffer  = []
         shifted = False
 
@@ -110,6 +140,7 @@ class QRScanner:
         token = raw.strip().lower()
         if _is_email(token):
             log.info("QR scan accepted: %s", token)
+            self._last_scan_at = time.time()
             self._queue.put(QRScanned(token=token))
         elif token:
             log.debug("QR scan rejected (not email): %s", token)
