@@ -52,10 +52,20 @@ Configuration is read when Python imports `config.py`, so set environment variab
 For a stateful browser development server without hardware, use the isolated simulator:
 
 ```bash
-CREMA_DB_PATH=/tmp/crema-simulator.db python3 -m devsim --host ::1 --port 8010
+CREMA_DB_PATH=/tmp/crema-simulator.db .venv/bin/python -m devsim --host 127.0.0.1 --port 8010
 ```
 
-The simulator enables development-only scenario routes and never starts the real scanner or sensor. Do not combine it with `CREMA_START_HARDWARE=1`.
+Open `http://127.0.0.1:8010/kiosk` for the kiosk or `http://127.0.0.1:8010/ui/` for the dashboard. Add `--reset` without a custom `CREMA_DB_PATH` to reset the default simulator database before startup.
+
+For hot-reload frontend development, run the simulator on port 8000 in one terminal:
+
+```bash
+CREMA_DB_PATH=/tmp/crema-simulator.db .venv/bin/python -m devsim --host 127.0.0.1 --port 8000
+```
+
+Then run `npm run dev` from `dashboard/` in another terminal and open `http://127.0.0.1:5173/ui/kiosk`. Vite proxies API and WebSocket requests to the simulator on port 8000.
+
+The simulator enables development-only scenario routes and never starts the real scanner or sensor. Do not combine it with `CREMA_START_HARDWARE=1`. For example, `curl -X POST http://127.0.0.1:8010/dev/simulator/state/armed` starts a simulated identified session, and `curl -X POST http://127.0.0.1:8010/dev/simulator/state/brewing` starts a simulated brew.
 
 ## Generated API contracts
 
@@ -123,7 +133,7 @@ git diff --check
 
 ## Kiosk visual checks
 
-The target display is 800 x 480. Test the affected kiosk states at that exact viewport and confirm:
+The target display is 800 x 480. On larger browser windows, the kiosk remains an 800 x 480 stage centered in the window. Test the affected kiosk states at the native viewport and confirm:
 
 - The document is exactly one viewport with no scrolling.
 - Text does not clip with realistic long user names and maximum-value counters.

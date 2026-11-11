@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react'
+import type { ReactNode } from 'react'
 import { useKioskSocket } from './hooks/useKioskSocket'
 import { useKioskSound } from './hooks/useKioskSound'
 import type { KioskSnapshot } from './hooks/useKioskSocket'
@@ -17,6 +18,16 @@ import { StatusToast } from './overlays/StatusToast'
 type RatingTarget = {
   brewId: number
   sessionKey: string
+}
+
+function KioskFrame({ children }: { children: ReactNode }) {
+  return (
+    <div className="fixed inset-0 flex items-center justify-center overflow-hidden bg-raised text-ink">
+      <div data-kiosk-stage className="kiosk-stage relative overflow-hidden bg-bg">
+        {children}
+      </div>
+    </div>
+  )
 }
 
 function sessionKey(snapshot: KioskSnapshot) {
@@ -60,9 +71,9 @@ export function KioskApp() {
 
   if (!snapshot) {
     return (
-      <div className="fixed inset-0 overflow-hidden bg-bg text-ink">
+      <KioskFrame>
         <Reconnecting />
-      </div>
+      </KioskFrame>
     )
   }
 
@@ -83,7 +94,7 @@ export function KioskApp() {
     sessionKey(snapshot) === ratingTarget.sessionKey
 
   return (
-    <div className="fixed inset-0 overflow-hidden bg-bg text-ink">
+    <KioskFrame>
       <div inert={!connected} aria-hidden={!connected} className="h-full">
         {renderScreen()}
       </div>
@@ -99,6 +110,6 @@ export function KioskApp() {
         />
       )}
       {connected && <HardwareWarning hardware={snapshot.hardware} />}
-    </div>
+    </KioskFrame>
   )
 }

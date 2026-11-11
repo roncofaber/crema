@@ -43,16 +43,21 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="CREMA API", lifespan=lifespan)
 
 
+def _route_template(request: Request) -> str | None:
+    effective_route = request.scope.get("fastapi", {}).get("effective_route_context")
+    if effective_route is not None:
+        return effective_route.path_format
+    return getattr(request.scope.get("route"), "path", None)
+
+
 @app.middleware("http")
 async def collect_request_metrics(request: Request, call_next):
     try:
         response = await call_next(request)
     except Exception:
-        route = request.scope.get("route")
-        monitoring.record_http_request(request.method, getattr(route, "path", None), 500)
+        monitoring.record_http_request(request.method, _route_template(request), 500)
         raise
-    route = request.scope.get("route")
-    monitoring.record_http_request(request.method, getattr(route, "path", None), response.status_code)
+    monitoring.record_http_request(request.method, _route_template(request), response.status_code)
     return response
 
 

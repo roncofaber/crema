@@ -1,3 +1,4 @@
+import time
 from unittest.mock import patch
 
 import pytest
@@ -58,6 +59,21 @@ def test_simulator_fault_injection_and_input_validation(simulator):
     assert simulator.post("/dev/simulator/state/unknown").status_code == 404
     assert simulator.post("/dev/simulator/scan", json={"token": "invalid"}).status_code == 422
     assert simulator.post("/dev/simulator/brew/end", json={"duration": 0}).status_code == 422
+
+
+def test_simulated_sensor_produces_continuous_samples():
+    sensor = SimulatedSensor()
+    sensor.start()
+    initial_read = sensor.last_read_at
+    deadline = time.monotonic() + 2
+    try:
+        while sensor.last_read_at == initial_read and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert sensor.last_read_at > initial_read
+        assert sensor.status()["stale_age"] < 1
+    finally:
+        sensor.stop()
+    assert sensor.status()["thread_alive"] is False
 
 
 def test_simulator_lifecycle_does_not_acquire_maintenance_lock_or_recover(test_db):

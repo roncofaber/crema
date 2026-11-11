@@ -122,6 +122,25 @@ test("all kiosk states fit the production viewport and interactions recover", as
   expect(errors).toEqual([])
 })
 
+test("kiosk stage stays 800 by 480 on larger displays", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await page.goto("/kiosk", { waitUntil: "networkidle" })
+  await setState(page, "idle")
+
+  const stage = page.locator("[data-kiosk-stage]")
+  const frame = await stage.boundingBox()
+  expect(frame).toEqual({ x: 240, y: 210, width: 800, height: 480 })
+  expect(await page.evaluate(() => [
+    document.documentElement.scrollWidth,
+    document.documentElement.scrollHeight,
+  ])).toEqual([1280, 900])
+
+  await page.getByRole("button", { name: "Audio settings" }).click()
+  const dialog = await page.getByRole("dialog", { name: "Audio feedback" }).boundingBox()
+  expect(dialog).toEqual(frame)
+  await page.screenshot({ path: testInfo.outputPath("kiosk-large-window-800x480.png") })
+})
+
 test("a delayed logout cannot end or disable a replacement session", async ({ page }) => {
   await page.goto("/kiosk", { waitUntil: "networkidle" })
   await setState(page, "armed")

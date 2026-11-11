@@ -28,6 +28,18 @@ body {
   color: #38220f;
 }
 
+.kiosk-stage {
+  width: 100%;
+  height: 100%;
+}
+
+@media (min-width: 800px) and (min-height: 480px) {
+  .kiosk-stage {
+    width: 800px;
+    height: 480px;
+  }
+}
+
 .font-display {
   font-family: 'Playfair Display', Georgia, serif;
 }

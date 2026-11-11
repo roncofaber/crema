@@ -1,3 +1,4 @@
+import threading
 import time
 
 
@@ -43,6 +44,24 @@ class SimulatedSensor(SimulatedDevice):
         super().__init__()
         self.last_read_at = time.time()
         self.missing_samples = False
+        self._stop_event = threading.Event()
+        self._thread = threading.Thread(target=self._run, daemon=True, name="simulated-sensor")
+
+    def start(self):
+        super().start()
+        self._stop_event.clear()
+        self._thread = threading.Thread(target=self._run, daemon=True, name="simulated-sensor")
+        self._thread.start()
+
+    def stop(self):
+        super().stop()
+        self._stop_event.set()
+        self._thread.join(timeout=1)
+
+    def _run(self):
+        while not self._stop_event.wait(0.25):
+            if self.alive and self.connected and not self.missing_samples:
+                self.last_read_at = time.time()
 
     def configure(self, *, degraded: bool, missing_samples: bool):
         self.degrade(degraded)
@@ -57,4 +76,5 @@ class SimulatedSensor(SimulatedDevice):
             **super().status(),
             "last_read_at": last_read_at,
             "stale_age": stale_age,
+            "thread_alive": self._thread.is_alive(),
         }

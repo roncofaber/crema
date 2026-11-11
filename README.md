@@ -136,7 +136,7 @@ The React dashboard at `/ui` refreshes live data periodically and shows:
 
 ## Kiosk touch UI
 
-The kiosk UI at `/kiosk` runs full-screen on the 5" DSI touchscreen via Chromium. It connects to `/ws/kiosk` for real-time state and shows:
+The kiosk UI at `/kiosk` runs full-screen on the 5" DSI touchscreen via Chromium. On larger browser windows, it remains an 800 x 480 stage centered in the window. It connects to `/ws/kiosk` for real-time state and shows:
 
 - **Idle**: waiting for QR scan
 - **Armed**: user name, brew count, shot type / decaf toggles, logout button, session timeout bar

@@ -8,7 +8,7 @@ dependencies = [
     "click",
     "fastapi",
     "uvicorn[standard]",
-    "httpx",
+    "httpx2",
     "itsdangerous",
 ]
 
