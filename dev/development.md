@@ -55,7 +55,7 @@ For a stateful browser development server without hardware, use the isolated sim
 CREMA_DB_PATH=/tmp/crema-simulator.db .venv/bin/python -m devsim --host 127.0.0.1 --port 8010
 ```
 
-Open `http://127.0.0.1:8010/kiosk` for the kiosk or `http://127.0.0.1:8010/ui/` for the dashboard. Add `--reset` without a custom `CREMA_DB_PATH` to reset the default simulator database before startup.
+Open `http://127.0.0.1:8010/dev/simulator/panel` for a control panel that shows the live kiosk at 800 x 480 next to buttons for every simulated event (QR scans, brew start and end, state jumps, hardware faults, and WebSocket drops). The kiosk alone is at `http://127.0.0.1:8010/kiosk` and the dashboard at `http://127.0.0.1:8010/ui/`. Add `--reset` without a custom `CREMA_DB_PATH` to reset the default simulator database before startup.
 
 For hot-reload frontend development, run the simulator on port 8000 in one terminal:
 

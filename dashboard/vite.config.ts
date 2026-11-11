@@ -12,6 +12,7 @@ export default defineConfig({
       "/stats":  "http://localhost:8000",
       "/status": "http://localhost:8000",
       "/kiosk":  "http://localhost:8000",
+      "/dev":    "http://localhost:8000",
       "/ws":     { target: "ws://localhost:8000", ws: true },
     },
   },

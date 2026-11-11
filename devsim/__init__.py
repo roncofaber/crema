@@ -9,6 +9,10 @@ def start():
 
 
 def router():
-    from devsim.routes import router as simulator_router
+    from fastapi import APIRouter
+    from devsim.routes import panel_router, router as simulator_router
 
-    return simulator_router
+    combined = APIRouter()
+    combined.include_router(simulator_router)
+    combined.include_router(panel_router)
+    return combined

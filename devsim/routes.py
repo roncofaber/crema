@@ -1,6 +1,8 @@
+from pathlib import Path
 import time
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, field_validator
 
 from api.auth import verify_token
@@ -14,6 +16,14 @@ router = APIRouter(
     tags=["simulator"],
     dependencies=[Depends(verify_token)],
 )
+
+panel_router = APIRouter(prefix="/dev/simulator", include_in_schema=False)
+_PANEL = Path(__file__).with_name("panel.html")
+
+
+@panel_router.get("/panel")
+def panel():
+    return FileResponse(_PANEL, media_type="text/html")
 
 
 class ScanRequest(BaseModel):

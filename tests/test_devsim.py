@@ -61,6 +61,19 @@ def test_simulator_fault_injection_and_input_validation(simulator):
     assert simulator.post("/dev/simulator/brew/end", json={"duration": 0}).status_code == 422
 
 
+def test_simulator_panel_is_served_without_auth(test_db):
+    import devsim
+
+    app = FastAPI()
+    app.include_router(devsim.router())
+    with patch("api.auth._TOKEN", "secret"), TestClient(app) as client:
+        response = client.get("/dev/simulator/panel")
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/html")
+        assert "/dev/simulator" in response.text
+        assert client.get("/dev/simulator/snapshot").status_code == 401
+
+
 def test_simulated_sensor_produces_continuous_samples():
     sensor = SimulatedSensor()
     sensor.start()

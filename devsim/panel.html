@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CREMA simulator</title>
+<style>
+  :root {
+    --bg: #dbc1ac; --surface: #ece0d1; --raised: #d4bca0; --border: #c4a88a;
+    --accent: #b87018; --accent-strong: #8a5010; --ink: #38220f; --muted: #634832;
+    --ok: #3d6b35; --bad: #9b2c1f;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.4 system-ui, sans-serif; }
+  main { display: flex; gap: 20px; padding: 16px; align-items: flex-start; flex-wrap: wrap; }
+  .kiosk { flex: none; }
+  .kiosk iframe { width: 800px; height: 480px; border: 0; display: block; border-radius: 6px; box-shadow: 0 4px 18px rgb(56 34 15 / 0.3); background: var(--surface); }
+  .kiosk .links { margin-top: 8px; color: var(--muted); }
+  .kiosk a { color: var(--accent-strong); }
+  .controls { flex: 1; min-width: 320px; max-width: 560px; display: grid; gap: 12px; }
+  section { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 12px; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 8px; }
+  .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .row + .row { margin-top: 8px; }
+  button { font: inherit; padding: 7px 12px; border-radius: 5px; border: 1px solid var(--border); background: var(--raised); color: var(--ink); cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); border-color: var(--accent-strong); color: #fff; }
+  button.warn { color: var(--bad); }
+  input { font: inherit; padding: 6px 8px; border: 1px solid var(--border); border-radius: 5px; background: #fff; color: var(--ink); }
+  input[type=number] { width: 72px; }
+  input.wide { flex: 1; min-width: 180px; }
+  .status { display: flex; gap: 12px; flex-wrap: wrap; font-family: ui-monospace, monospace; font-size: 13px; }
+  .pill { padding: 2px 8px; border-radius: 999px; background: var(--raised); }
+  .pill.on { background: var(--ok); color: #fff; }
+  .pill.off { background: var(--bad); color: #fff; }
+  #log { font-family: ui-monospace, monospace; font-size: 12px; max-height: 140px; overflow: auto; margin: 0; white-space: pre-wrap; }
+  #log .err { color: var(--bad); }
+  details pre { font-size: 12px; max-height: 260px; overflow: auto; margin: 8px 0 0; }
+</style>
+</head>
+<body>
+<main>
+  <div class="kiosk">
+    <iframe id="kiosk" title="Kiosk preview"></iframe>
+    <div class="links">
+      <button id="reload-kiosk" type="button">Reload preview</button>
+      Open separately: <a id="kiosk-link" target="_blank">kiosk</a> · <a href="/ui/" target="_blank">dashboard</a>
+    </div>
+  </div>
+
+  <div class="controls">
+    <section>
+      <h1>CREMA simulator</h1>
+      <div class="status">
+        <span>state: <b id="s-state">-</b></span>
+        <span>user: <b id="s-user">-</b></span>
+        <span>brews: <b id="s-brews">-</b></span>
+        <span id="s-scanner" class="pill">scanner</span>
+        <span id="s-sensor" class="pill">sensor</span>
+      </div>
+    </section>
+
+    <section>
+      <h2>Jump to state</h2>
+      <div class="row" id="states">
+        <button data-state="idle">Idle</button>
+        <button data-state="armed">Armed (alice)</button>
+        <button data-state="brewing">Brewing</button>
+        <button data-state="anon_brew">Anonymous brew</button>
+        <button data-state="rating">Rating</button>
+        <button data-state="summary">Summary</button>
+        <button data-state="handoff">Handoff (bob)</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>QR scan</h2>
+      <div class="row">
+        <input id="token" class="wide" type="email" value="alice@example.com" aria-label="Scanned email">
+        <button class="primary" id="scan">Scan</button>
+      </div>
+      <div class="row">
+        <button data-token="alice@example.com">alice</button>
+        <button data-token="bob@example.com">bob</button>
+        <button data-token="carol@example.com">carol</button>
+        <button data-token="a.very.long.username.for.layout@example.com">long name</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Sensor</h2>
+      <div class="row">
+        <button class="primary" id="brew-start">Brew start</button>
+        <label>duration <input id="duration" type="number" min="1" max="3600" value="25"> s</label>
+        <button class="primary" id="brew-end">Brew end</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Faults</h2>
+      <div class="row">
+        <button class="warn" id="hw-degrade">Hardware offline</button>
+        <button class="warn" id="hw-missing">Missing sensor samples</button>
+        <button id="hw-ok">Hardware OK</button>
+      </div>
+      <div class="row">
+        <button class="warn" id="ws-drop">Drop WebSocket</button>
+        <button id="ws-restore">Restore WebSocket</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Auth</h2>
+      <div class="row">
+        <input id="api-token" class="wide" type="password" placeholder="CREMA_API_TOKEN (only if set)" aria-label="API token">
+      </div>
+    </section>
+
+    <section>
+      <h2>Log</h2>
+      <pre id="log"></pre>
+      <details>
+        <summary>Raw snapshot</summary>
+        <pre id="raw"></pre>
+      </details>
+    </section>
+  </div>
+</main>
+
+<script>
+  const $ = (id) => document.getElementById(id)
+  const base = '/dev/simulator'
+  const kioskUrl = location.port === '5173' ? '/ui/kiosk' : '/kiosk'
+  $('kiosk').src = kioskUrl
+  $('kiosk-link').href = kioskUrl
+
+  const tokenInput = $('api-token')
+  try { tokenInput.value = sessionStorage.getItem('crema-sim-token') || '' } catch {}
+  tokenInput.addEventListener('change', () => {
+    try { sessionStorage.setItem('crema-sim-token', tokenInput.value) } catch {}
+  })
+
+  function log(text, isError) {
+    const line = document.createElement('div')
+    line.textContent = `${new Date().toLocaleTimeString()}  ${text}`
+    if (isError) line.className = 'err'
+    $('log').prepend(line)
+  }
+
+  async function call(method, path, body) {
+    const headers = { 'Content-Type': 'application/json' }
+    if (tokenInput.value) headers.Authorization = `Bearer ${tokenInput.value}`
+    const response = await fetch(base + path, {
+      method, headers, body: body === undefined ? undefined : JSON.stringify(body),
+    })
+    const data = await response.json().catch(() => null)
+    if (!response.ok) {
+      const detail = data && data.detail ? JSON.stringify(data.detail) : response.statusText
+      throw new Error(`${response.status} ${detail}`)
+    }
+    return data
+  }
+
+  async function act(label, method, path, body) {
+    try {
+      await call(method, path, body)
+      log(label)
+    } catch (error) {
+      log(`${label}: ${error.message}`, true)
+    }
+    refresh()
+  }
+
+  function pill(el, name, device) {
+    el.textContent = name
+    el.className = 'pill ' + (device && device.connected ? 'on' : 'off')
+    el.title = device && device.error ? device.error : ''
+  }
+
+  async function refresh() {
+    try {
+      const snap = await call('GET', '/snapshot')
+      $('s-state').textContent = snap.state
+      $('s-user').textContent = snap.user ?? '-'
+      $('s-brews').textContent = snap.brew_count
+      pill($('s-scanner'), 'scanner', snap.hardware && snap.hardware.scanner)
+      pill($('s-sensor'), 'sensor', snap.hardware && snap.hardware.sensor)
+      $('raw').textContent = JSON.stringify(snap, null, 2)
+    } catch (error) {
+      $('s-state').textContent = error.message.startsWith('503') ? 'disconnected' : error.message
+    }
+  }
+
+  document.querySelectorAll('[data-state]').forEach((button) => {
+    button.addEventListener('click', () => act(`state ${button.dataset.state}`, 'POST', `/state/${button.dataset.state}`))
+  })
+  document.querySelectorAll('[data-token]').forEach((button) => {
+    button.addEventListener('click', () => {
+      $('token').value = button.dataset.token
+      act(`scan ${button.dataset.token}`, 'POST', '/scan', { token: button.dataset.token })
+    })
+  })
+  $('scan').addEventListener('click', () => act(`scan ${$('token').value}`, 'POST', '/scan', { token: $('token').value }))
+  $('brew-start').addEventListener('click', () => act('brew start', 'POST', '/brew/start'))
+  $('brew-end').addEventListener('click', () => {
+    const duration = Number($('duration').value)
+    act(`brew end (${duration}s)`, 'POST', '/brew/end', { duration })
+  })
+  $('hw-degrade').addEventListener('click', () => act('hardware offline', 'POST', '/hardware?degraded=true'))
+  $('hw-missing').addEventListener('click', () => act('missing sensor samples', 'POST', '/hardware?degraded=false&missing_samples=true'))
+  $('hw-ok').addEventListener('click', () => act('hardware ok', 'POST', '/hardware?degraded=false&missing_samples=false'))
+  $('ws-drop').addEventListener('click', () => act('websocket dropped', 'POST', '/disconnect'))
+  $('ws-restore').addEventListener('click', () => act('websocket restored', 'POST', '/restore'))
+  $('reload-kiosk').addEventListener('click', () => { $('kiosk').src = kioskUrl })
+
+  refresh()
+  setInterval(refresh, 1000)
+</script>
+</body>
+</html>

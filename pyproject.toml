@@ -22,3 +22,6 @@ crema-monitor = "ops.monitoring:main"
 [tool.setuptools]
 py-modules = ["config", "main"]
 packages   = ["core", "hardware", "cli", "api", "api.routers", "devsim", "ops"]
+
+[tool.setuptools.package-data]
+devsim = ["panel.html"]
