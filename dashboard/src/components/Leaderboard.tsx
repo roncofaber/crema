@@ -9,16 +9,21 @@ function fmt(seconds: number): string {
 }
 
 function fmtDate(ts: number | null): string {
-  if (!ts) return "—"
+  if (!ts) return "-"
   return new Date(ts * 1000).toLocaleDateString()
 }
 
 export function Leaderboard() {
-  const { data: users } = usePolling(api.users, 30_000)
+  const { data: users, error, loading, stale } = usePolling(api.users, 30_000)
 
   return (
     <div className="bg-surface rounded overflow-hidden">
-      <table className="w-full text-sm">
+      {error && stale && users && (
+        <p role="alert" className="px-4 py-2 border-b border-border font-plex text-xs text-muted" title={error}>
+          Leaderboard update failed. Showing the last update.
+        </p>
+      )}
+      <table className="w-full text-sm" aria-busy={loading}>
         <thead>
           <tr className="border-b border-border">
             <th className="text-left px-4 py-3 text-xs uppercase tracking-widest text-muted font-normal w-8">#</th>
@@ -30,7 +35,15 @@ export function Leaderboard() {
         </thead>
         <tbody>
           {users == null
-            ? Array.from({ length: 4 }).map((_, i) => <SkeletonRow key={i} cols={5} />)
+            ? error
+              ? (
+                <tr>
+                  <td colSpan={5} role="alert" title={error} className="px-4 py-8 text-center font-plex text-xs text-muted">
+                    Leaderboard unavailable. Retrying...
+                  </td>
+                </tr>
+              )
+              : Array.from({ length: 4 }).map((_, i) => <SkeletonRow key={i} cols={5} />)
             : users.map((u, i) => (
                 <tr key={u.id} className="border-b border-border-subtle last:border-0">
                   <td className="px-4 py-3 font-plex text-xs text-faint">{i + 1}</td>

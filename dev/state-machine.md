@@ -61,7 +61,7 @@ Only `kind='brew'` increments `brew_count`, sets `last_brew_at`, and stores `sho
 In `ARMED` state, `on_tick()` runs the timer at 1 Hz:
 
 - **No brew yet**: countdown from `ARMED_TIMEOUT` (120 s). Expire → close session → `IDLE`.
-- **After a brew**: countdown from `SESSION_TIMEOUT` (300 s) since `last_brew_at`. Expire → compute avg rating → `SUMMARY` → wait `SUMMARY_DURATION` (5 s) → close session → `IDLE`.
+- **After a brew**: countdown from `SESSION_TIMEOUT` (300 s) since `last_brew_at`. Expire → compute avg rating → close session → `SUMMARY` → wait `SUMMARY_DURATION` (5 s) → `IDLE`.
 
 ## Brew options
 
@@ -69,6 +69,8 @@ In `ARMED` state, `on_tick()` runs the timer at 1 Hz:
 - Default on new session: `shot_type="double"`, `decaf=False`
 - Reset to defaults on every user handoff
 - Changeable via `set_brew_options()` up until the session ends
+- Brew-option and logout API requests include the snapshot's `session_started_at`; the state machine rejects stale requests after handoff with `409`
+- The touch client serializes rapid changes, rolls back failures, and accepts the next authoritative snapshot so stale snapshots cannot reset either option
 - Written to the `brews` table only for `kind='brew'`
 
 ## Snapshot payload

@@ -1,18 +1,22 @@
 import logging
+import math
 import threading
 import time
-import math
 from queue import Queue
-from core.events import BrewStart, BrewEnd
+
 from config import (
-    ADXL_BREW_THRESHOLD, ADXL_SAMPLE_RATE,
-    BREW_END_SILENCE, MIN_VIBRATION_PULSE,
+    ADXL_BREW_THRESHOLD,
+    ADXL_SAMPLE_RATE,
     BREW_CONFIRM_WINDOW,
+    BREW_END_SILENCE,
+    MIN_VIBRATION_PULSE,
 )
+from core.events import BrewEnd, BrewStart
 
 log = logging.getLogger(__name__)
 
 POLL_INTERVAL = 1.0 / ADXL_SAMPLE_RATE
+MAX_SAMPLE_GAP = max(0.1, POLL_INTERVAL * 2.5)
 
 
 class VibrationSensor:
@@ -29,48 +33,83 @@ class VibrationSensor:
         self._thread = threading.Thread(target=self._run, daemon=True, name="vibration-sensor")
         self._stop = threading.Event()
         self._accel = None
+        self._i2c = None
         self._connected = False
         self._last_read_at = None
         self._last_error = None
 
-        self._vibration_start = None   # timestamp of first high magnitude in current cycle
-        self._last_valid_high = None   # timestamp of last high magnitude >= MIN_VIBRATION_PULSE
-        self._pulse_start = None       # timestamp when current high pulse began
-        self._brew_start_fired = False # whether BrewStart has been posted this cycle
+        self._vibration_start = None
+        self._last_valid_high = None
+        self._pulse_start = None
+        self._silence_start = None
+        self._last_sample_at = None
+        self._brew_start_fired = False
 
     def start(self):
         if not self._thread.is_alive():
             self._thread.start()
 
+    @staticmethod
+    def _close_resource(resource, *method_names):
+        if resource is None:
+            return
+        for method_name in method_names:
+            method = getattr(resource, method_name, None)
+            if callable(method):
+                try:
+                    method()
+                except Exception as exc:
+                    log.debug("ADXL345 resource cleanup failed: %s", exc)
+                return
+
+    def _release_device(self):
+        accel = self._accel
+        i2c = self._i2c
+        self._accel = None
+        self._i2c = None
+        self._connected = False
+        self._close_resource(accel, "close")
+        self._close_resource(i2c, "deinit", "close")
+
     def _connect(self) -> bool:
+        self._release_device()
         try:
             import board
             import busio
             import adafruit_adxl34x
 
-            i2c = busio.I2C(board.SCL, board.SDA)
-            self._accel = adafruit_adxl34x.ADXL345(i2c)
+            self._i2c = busio.I2C(board.SCL, board.SDA)
+            self._accel = adafruit_adxl34x.ADXL345(self._i2c)
             self._connected = True
             self._last_error = None
             log.info("ADXL345 connected")
             return True
-        except Exception as e:
-            self._accel = None
-            self._connected = False
-            self._last_error = str(e)
-            log.error("ADXL345 init failed: %s - retrying in 5 s", e)
+        except Exception as exc:
+            self._release_device()
+            self._last_error = str(exc)
+            log.error("ADXL345 init failed: %s - retrying in 5 s", exc)
             return False
 
     def stop(self):
         self._stop.set()
         if self._thread.is_alive():
             self._thread.join(timeout=2)
+        if self._thread.is_alive():
+            log.error("ADXL345 thread did not stop within 2 s")
+            return False
+        self._release_device()
+        return True
 
     def status(self) -> dict:
+        stale_age = None
+        if self._last_read_at is not None:
+            stale_age = max(0.0, time.time() - self._last_read_at)
         return {
             "connected": self._connected,
             "last_read_at": self._last_read_at,
             "error": self._last_error,
+            "thread_alive": self._thread.is_alive(),
+            "stale_age": stale_age,
         }
 
     def _magnitude(self):
@@ -79,23 +118,35 @@ class VibrationSensor:
             return None
         try:
             x, y, z = self._accel.acceleration
+            magnitude = math.sqrt(x * x + y * y + z * z)
+            if not math.isfinite(magnitude):
+                raise ValueError("non-finite acceleration reading")
             self._connected = True
             self._last_read_at = time.time()
-            return math.sqrt(x * x + y * y + z * z)
-        except Exception as e:
-            self._connected = False
-            self._last_error = str(e)
-            self._accel = None
-            log.warning("I2C read error: %s - reconnecting", e)
+            return magnitude
+        except Exception as exc:
+            self._release_device()
+            self._last_error = str(exc)
+            log.warning("I2C read error: %s - reconnecting", exc)
             return None
 
     def _run(self):
-        while not self._stop.is_set():
-            if self._accel is None and not self._connect():
-                self._stop.wait(5)
-                continue
-            self._step()
-            self._stop.wait(POLL_INTERVAL)
+        try:
+            while not self._stop.is_set():
+                if self._accel is None and not self._connect():
+                    self._stop.wait(5)
+                    continue
+                self._step()
+                self._stop.wait(POLL_INTERVAL)
+        finally:
+            self._release_device()
+
+    def _reset_partial_debounce(self):
+        self._pulse_start = None
+        self._silence_start = None
+        if not self._brew_start_fired:
+            self._vibration_start = None
+            self._last_valid_high = None
 
     def _step(self, magnitude=None):
         """
@@ -105,9 +156,15 @@ class VibrationSensor:
         now = time.time()
         if magnitude is None:
             magnitude = self._magnitude()
-            if magnitude is None:
-                return
+        if magnitude is None:
+            self._last_sample_at = None
+            self._reset_partial_debounce()
+            return
 
+        if self._last_sample_at is not None:
+            if now - self._last_sample_at > MAX_SAMPLE_GAP:
+                self._reset_partial_debounce()
+        self._last_sample_at = now
         is_high = magnitude > ADXL_BREW_THRESHOLD
 
         if is_high:
@@ -115,9 +172,9 @@ class VibrationSensor:
                 self._pulse_start = now
 
             pulse_duration = now - self._pulse_start
-
             if pulse_duration >= MIN_VIBRATION_PULSE:
                 self._last_valid_high = now
+                self._silence_start = None
                 if self._vibration_start is None:
                     self._vibration_start = self._pulse_start
 
@@ -128,9 +185,10 @@ class VibrationSensor:
                         self._brew_start_fired = True
         else:
             self._pulse_start = None
-
             if self._last_valid_high is not None:
-                silence = now - self._last_valid_high
+                if self._silence_start is None:
+                    self._silence_start = now
+                silence = now - self._silence_start
                 if silence >= BREW_END_SILENCE:
                     duration = self._last_valid_high - self._vibration_start
                     log.info("BrewEnd fired: duration=%.1fs silence=%.1fs", duration, silence)
@@ -140,4 +198,5 @@ class VibrationSensor:
                     ))
                     self._vibration_start = None
                     self._last_valid_high = None
+                    self._silence_start = None
                     self._brew_start_fired = False

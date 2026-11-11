@@ -21,6 +21,8 @@ pip install -e .
 
 The scanner is detected automatically by device name. The database is created at `data/espresso.db` on first run. Enable I2C (`raspi-config` then Interface Options then I2C) before running on the Pi.
 
+The supported installation runs from an editable source checkout. A regular wheel currently contains the Python service but not the built dashboard assets, so non-editable installations do not serve `/ui` or `/kiosk`.
+
 For API-only local development, frontend setup, isolated test databases, and verification commands, see [`dev/development.md`](dev/development.md).
 
 ## CLI
@@ -28,7 +30,7 @@ For API-only local development, frontend setup, isolated test databases, and ver
 All commands are available through the `crema` entry point.
 
 ```
-crema serve       Start the combined hardware + API server (default: 0.0.0.0:8000)
+crema serve       Start the combined hardware + API server (default: 127.0.0.1:8000)
 crema logs        View live service logs
 crema stats       Show the stats dashboard (terminal)
 crema users       User management
@@ -79,12 +81,15 @@ crema users delete <name>
 Database maintenance utilities:
 
 ```bash
-crema db backup [OUTPUT]
+crema db backup [OUTPUT] [--keep N]
+crema db cleanup [DIRECTORY] [--keep N] [--max-age-days N]
 crema db check [DATABASE]
 crema db restore BACKUP
 crema db export [OUTPUT]
 crema db reclassify
 ```
+
+Stop `crema-kiosk` before restoring or reclassifying the live database. Restore validates the CREMA schema and refuses to run while the service owns the maintenance lock. Reclassification clears brew-only metadata when a brew becomes noise. Automatic backups use temporary files, integrity checks, and atomic replacement. Retention is limited to CREMA's timestamped backup names; see `docs/operations.md`.
 
 ## API
 
@@ -99,6 +104,10 @@ FastAPI server at port 8000. Full reference: [`dev/api-reference.md`](dev/api-re
 | `GET /stats/` | Aggregate totals |
 | `GET /stats/daily` | Per-day brew counts (last 30 days) |
 | `GET /users/` | All registered users |
+| `GET /auth/session` | Authentication mode and session status |
+| `POST /auth/login` | Create a session cookie in session-auth mode |
+| `POST /auth/logout` | Revoke the browser session |
+| `GET /api/metrics` | Authenticated Prometheus metrics |
 | `POST /kiosk/logout` | Force end current session |
 | `POST /kiosk/brew-options` | Set shot type / decaf for session |
 | `POST /kiosk/rate` | Submit 1–5 star rating for a brew |
@@ -106,7 +115,13 @@ FastAPI server at port 8000. Full reference: [`dev/api-reference.md`](dev/api-re
 | `/ui` | React dashboard (SPA) |
 | `/kiosk` | Touch kiosk UI (SPA) |
 
-**Authentication:** set `CREMA_API_TOKEN` in the service environment. When building the browser UI, set `VITE_API_TOKEN` to the same value or export `CREMA_API_TOKEN` before running the deployment scripts. Data and control REST routes then require `Authorization: Bearer <token>`; `/`, `/health`, and the WebSocket remain public. Browser tokens are visible to users, so use this mode only on a trusted local network.
+**Authentication and network access:** the server defaults to loopback, which supports the local kiosk display. To expose it on the LAN, set `CREMA_HOST=0.0.0.0` for `python main.py`, or pass `--host 0.0.0.0` to `crema serve`, and set `CREMA_API_TOKEN` in the service environment. Non-loopback binding without a token fails at startup unless `CREMA_ALLOW_INSECURE=1` is explicitly set.
+
+When building the browser UI for token mode, set `VITE_API_TOKEN` to the same value or export `CREMA_API_TOKEN` before running the deployment scripts. Data, control, and metrics REST routes then require `Authorization: Bearer <token>`; `/` and `/health` remain public. WebSocket connections require an allowed HTTP Origin. Browser tokens are visible to users, so use this mode only on a trusted local network.
+
+For password-only browser sessions instead, set `CREMA_AUTH_MODE=session`, a `CREMA_ADMIN_PASSWORD` of at least 12 UTF-8 bytes, and a random `CREMA_SESSION_SECRET` of at least 32 UTF-8 bytes. The dashboard and kiosk then sign in with an HttpOnly, Strict cookie and need no API token in the bundle. An expired or revoked session returns the browser to its sign-in screen. Cookies default to HTTPS-only; use `CREMA_COOKIE_SECURE=0` only for local HTTP development or testing. `CREMA_SESSION_TTL` defaults to 43200 seconds and accepts 300 through 604800.
+
+`CREMA_CORS_ORIGINS` accepts a comma-separated Origin allowlist and defaults to the two Vite development Origins; set it to an empty string to disable cross-origin access entirely. See `dev/api-reference.md` for authentication routes and `docs/operations.md` for protected metrics.
 
 ## Dashboard
 
@@ -116,7 +131,8 @@ The React dashboard at `/ui` refreshes live data periodically and shows:
 - Stats cards (total brews, total time, users)
 - Leaderboard
 - Daily brew chart (last 30 days)
-- Recent brews with relative timestamps
+- Recent brews with relative timestamps and server-side user, kind, shot, decaf, and date filters
+- A narrow-screen filter toolbar that scrolls within the page
 
 ## Kiosk touch UI
 
@@ -127,6 +143,8 @@ The kiosk UI at `/kiosk` runs full-screen on the 5" DSI touchscreen via Chromium
 - **Brewing**: brew counter, elapsed time, progress bar, adjustable shot type / decaf
 - **Summary**: session brew count, brew time, and average rating
 - **Rating prompt**: 1–5 stars after each brew (auto-dismisses after 15 s)
+- **Audio feedback**: opt-in, browser-local cues with visible quiet hours, defaulting to 22:00 through 07:00
+- **Reconnect handling**: the last valid snapshot remains visible but stale, with controls paused until fresh data arrives
 
 ## Deployment
 
@@ -187,7 +205,21 @@ Configuration defaults live in `config.py` and can be overridden through environ
 | `CREMA_SUMMARY_DURATION` | 5 s | Summary screen duration |
 | `CREMA_SCANNER_DEVICE_NAME` | MINJCODE device name | USB scanner name |
 | `CREMA_DB_PATH` | `data/espresso.db` | SQLite database path |
-| `CREMA_BACKUP_DIR` | `data/backups` | Automatic backup directory |
+| `CREMA_BACKUP_DIR` | `data/backups` | Timestamped backup directory |
+| `CREMA_BACKUP_RETENTION_COUNT` | `14` | Maximum timestamped backups kept |
+| `CREMA_BACKUP_RETENTION_DAYS` | `0` | Age pruning in days; 0 disables it |
+| `CREMA_HOST` | `127.0.0.1` | Bind address used by `python main.py` |
+| `CREMA_API_TOKEN` | unset | Bearer token for REST data, control, automation, and metrics routes |
+| `CREMA_AUTH_MODE` | `token` | `token` or password-based `session` authentication |
+| `CREMA_ADMIN_PASSWORD` | unset | Session-mode administrator password, at least 12 UTF-8 bytes |
+| `CREMA_SESSION_SECRET` | unset | Session-cookie signing secret, at least 32 UTF-8 bytes |
+| `CREMA_SESSION_TTL` | `43200` | Session lifetime in seconds, from 300 through 604800 |
+| `CREMA_COOKIE_SECURE` | `1` | HTTPS-only cookies; disable only for local HTTP development |
+| `CREMA_LOG_LEVEL` | `INFO` | Standard runtime logging level |
+| `CREMA_LOG_FORMAT` | `text` | Runtime log format: `text` or `jsonl` |
+| `CREMA_LOG_FILE` | unset | Optional additional append-only log destination |
+| `CREMA_CORS_ORIGINS` | Vite development Origins | Comma-separated HTTP Origin allowlist for REST and WebSocket access |
+| `CREMA_ALLOW_INSECURE` | unset | Set to `1` to explicitly allow non-loopback serving without a token |
 
 ## Further reading
 
@@ -198,3 +230,4 @@ Configuration defaults live in `config.py` and can be overridden through environ
 - [`dev/hardware.md`](dev/hardware.md) - wiring, calibration, sensor driver internals
 - [`dev/kiosk-ui.md`](dev/kiosk-ui.md) - React kiosk UI, screens, WebSocket hook
 - [`dev/deployment.md`](dev/deployment.md) - systemd services, install, env vars
+- [`docs/operations.md`](docs/operations.md) - metrics, JSONL logs, passive monitoring, backup retention, and recovery

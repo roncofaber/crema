@@ -15,9 +15,9 @@ export function AnonBrewing({ snapshot }: Props) {
   const fill = Math.min(1, (elapsed ?? 0) / BREW_MAX)
 
   return (
-    <div className="h-screen bg-bg flex flex-col">
+    <div className="relative h-full min-h-0 overflow-hidden bg-bg flex flex-col">
       <div className="h-1 bg-border flex-shrink-0" />
-      <div className="flex-1 flex flex-col items-center justify-center gap-3">
+      <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-3 px-8 py-3">
         <p className="font-plex text-sm uppercase tracking-[0.18em] text-faint">Anonymous</p>
         <p className="font-display text-8xl text-ink leading-none">×1</p>
         <p className="font-plex text-2xl text-crema-400 tracking-wide">{fmt(elapsed)}</p>

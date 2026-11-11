@@ -14,16 +14,23 @@ def cli():
 
 
 @cli.command()
-@click.option("--host", default="0.0.0.0", show_default=True, help="Bind address.")
+@click.option("--host", default="127.0.0.1", show_default=True, help="Bind address.")
 @click.option("--port", default=8000, show_default=True, help="Port to listen on.")
 @click.option("--reload", is_flag=True, default=False, help="Auto-reload on code changes (dev only).")
 def serve(host, port, reload):
     """Start the CREMA API server."""
     import os
     import uvicorn
+    from api.auth import require_safe_binding
+    from api.logging import configure_logging, uvicorn_log_config
 
+    configure_logging()
+    require_safe_binding(host)
     os.environ["CREMA_START_HARDWARE"] = "1"
-    uvicorn.run("api.main:app", host=host, port=port, reload=reload)
+    uvicorn.run(
+        "api.main:app", host=host, port=port, reload=reload,
+        log_config=uvicorn_log_config(),
+    )
 
 
 cli.add_command(stats)

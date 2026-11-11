@@ -11,7 +11,12 @@ def _follow(units: list[str], lines: int):
     args = ["journalctl", "-n", str(lines), "-f"]
     for u in units:
         args += ["-u", u]
-    subprocess.run(args)
+    try:
+        result = subprocess.run(args)
+    except OSError as exc:
+        raise click.ClickException(f"Cannot run journalctl: {exc}") from exc
+    if result.returncode:
+        raise click.ClickException(f"journalctl exited with status {result.returncode}.")
 
 
 @logs.command(name="all")

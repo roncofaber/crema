@@ -28,7 +28,7 @@ CREMA is a Raspberry Pi espresso kiosk. One Python service owns the QR scanner, 
 - Use `core.db.get_connection()` so foreign keys, the busy timeout, and shared path handling remain consistent.
 - Use SQLite's backup API through `crema db backup`; do not copy a live WAL database with a plain file copy.
 - Preserve forward-compatible, idempotent migrations in `init_db()` and test upgrades from legacy schemas when changing tables.
-- `init_db()` closes sessions left open after an unclean shutdown. Do not call it as a general request-time helper.
+- `init_db()` is non-destructive and does not close open sessions. Only the exclusive hardware owner runs `recover_open_sessions()` during startup. Do not call `init_db()` as a general request-time helper.
 - Tests must point `core.db.DB_PATH` and any imported API path at a temporary database.
 
 ## Hardware behavior

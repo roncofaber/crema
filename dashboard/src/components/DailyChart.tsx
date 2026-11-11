@@ -7,13 +7,24 @@ import { usePolling } from "../hooks/usePolling"
 import { SkeletonBlock } from "./Skeleton"
 
 export function DailyChart() {
-  const { data } = usePolling(api.dailyStats, 300_000)
+  const { data, error, loading, stale } = usePolling(signal => api.dailyStats(30, signal), 300_000)
 
   return (
-    <div className="bg-surface rounded p-5">
+    <div className="bg-surface rounded p-5" aria-busy={loading}>
       <h2 className="font-display italic text-muted text-base mb-5">Last 30 days</h2>
+      {error && stale && data && (
+        <p role="alert" className="mb-3 font-plex text-xs text-muted" title={error}>
+          Chart update failed. Showing the last update.
+        </p>
+      )}
       {data == null
-        ? <SkeletonBlock className="h-[200px]" />
+        ? error
+          ? (
+            <div role="alert" title={error} className="h-[200px] flex items-center justify-center text-center font-plex text-xs text-muted">
+              Daily stats unavailable. Retrying...
+            </div>
+          )
+          : <SkeletonBlock className="h-[200px]" />
         : (
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={data} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>

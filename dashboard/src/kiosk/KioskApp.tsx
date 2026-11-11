@@ -1,5 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import { useKioskSocket } from './hooks/useKioskSocket'
+import { useKioskSound } from './hooks/useKioskSound'
+import type { KioskSnapshot } from './hooks/useKioskSocket'
 import { Idle } from './screens/Idle'
 import { Armed } from './screens/Armed'
 import { Brewing } from './screens/Brewing'
@@ -8,47 +10,95 @@ import { Summary } from './screens/Summary'
 import { RatingPrompt } from './overlays/RatingPrompt'
 import { Reconnecting } from './overlays/Reconnecting'
 import { HardwareWarning } from './overlays/HardwareWarning'
+import { AudioControls } from './overlays/AudioControls'
+import { LivePanel } from './overlays/LivePanel'
+import { StatusToast } from './overlays/StatusToast'
+
+type RatingTarget = {
+  brewId: number
+  sessionKey: string
+}
+
+function sessionKey(snapshot: KioskSnapshot) {
+  return `${snapshot.session_started_at ?? 'none'}:${snapshot.user ?? 'anonymous'}`
+}
 
 export function KioskApp() {
   const { snapshot, connected } = useKioskSocket()
-  const [showRating, setShowRating] = useState(false)
-  const prevBrewId = useRef<number | null>(null)
-  const prevState = useRef<string>('')
-  const dismissRating = useCallback(() => setShowRating(false), [])
+  const sound = useKioskSound(snapshot)
+  const [ratingTarget, setRatingTarget] = useState<RatingTarget | null>(null)
+  const [previousSnapshot, setPreviousSnapshot] = useState<KioskSnapshot | null>(null)
+  const dismissRating = useCallback(() => {
+    const dismissed = ratingTarget
+    setRatingTarget(current => {
+      if (!current || !dismissed) return current
+      return current.brewId === dismissed.brewId && current.sessionKey === dismissed.sessionKey
+        ? null
+        : current
+    })
+  }, [ratingTarget])
 
-  // Show rating prompt when a brew completes (brewing → armed with new last_brew_id)
-  useEffect(() => {
-    if (
-      (prevState.current === 'brewing' || prevState.current === 'anon_brew') &&
-      snapshot.state === 'armed' &&
-      snapshot.last_brew_id != null &&
-      snapshot.last_brew_id !== prevBrewId.current
+  if (snapshot !== previousSnapshot) {
+    const prev = previousSnapshot
+    const currentKey = snapshot ? sessionKey(snapshot) : null
+    const sameSession = prev !== null && snapshot !== null && sessionKey(prev) === currentKey
+    setPreviousSnapshot(snapshot)
+
+    if (!snapshot || snapshot.state !== 'armed' || snapshot.last_brew_id == null) {
+      setRatingTarget(null)
+    } else if (
+      prev &&
+      (prev.state === 'brewing' || prev.state === 'anon_brew') &&
+      snapshot.last_brew_id !== prev.last_brew_id &&
+      (sameSession || (prev.state === 'anon_brew' && snapshot.user !== null))
     ) {
-      setShowRating(true)
-      prevBrewId.current = snapshot.last_brew_id
+      setRatingTarget({ brewId: snapshot.last_brew_id, sessionKey: sessionKey(snapshot) })
+    } else if (prev && !sameSession) {
+      setRatingTarget(null)
     }
-    prevState.current = snapshot.state
-  }, [snapshot.state, snapshot.last_brew_id])
+  }
+
+  if (!snapshot) {
+    return (
+      <div className="fixed inset-0 overflow-hidden bg-bg text-ink">
+        <Reconnecting />
+      </div>
+    )
+  }
 
   function renderScreen() {
+    if (!snapshot) return null
     switch (snapshot.state) {
       case 'idle':      return <Idle />
       case 'armed':     return <Armed snapshot={snapshot} />
       case 'brewing':   return <Brewing snapshot={snapshot} />
       case 'anon_brew': return <AnonBrewing snapshot={snapshot} />
       case 'summary':   return <Summary snapshot={snapshot} />
-      default:          return <Idle />
     }
   }
 
+  const showRating = connected && ratingTarget !== null &&
+    snapshot.state === 'armed' &&
+    snapshot.last_brew_id === ratingTarget.brewId &&
+    sessionKey(snapshot) === ratingTarget.sessionKey
+
   return (
-    <div className="relative w-screen h-screen overflow-hidden">
-      {renderScreen()}
-      {showRating && snapshot.state === 'armed' && (
-        <RatingPrompt snapshot={snapshot} onDismiss={dismissRating} />
+    <div className="fixed inset-0 overflow-hidden bg-bg text-ink">
+      <div inert={!connected} aria-hidden={!connected} className="h-full">
+        {renderScreen()}
+      </div>
+      <AudioControls sound={sound} />
+      <LivePanel snapshot={snapshot} connected={connected} />
+      <StatusToast disconnected={!connected} />
+      {showRating && (
+        <RatingPrompt
+          key={`${ratingTarget.sessionKey}:${ratingTarget.brewId}`}
+          snapshot={snapshot}
+          brewId={ratingTarget.brewId}
+          onDismiss={dismissRating}
+        />
       )}
       {connected && <HardwareWarning hardware={snapshot.hardware} />}
-      {!connected && <Reconnecting />}
     </div>
   )
 }

@@ -2,6 +2,8 @@ import sys
 import queue
 from unittest.mock import patch, MagicMock
 
+import pytest
+
 # Mock all hardware modules before hardware.sensor is imported (not available on non-Pi)
 for mod in ["board", "busio", "digitalio", "adafruit_adxl34x"]:
     sys.modules.setdefault(mod, MagicMock())
@@ -98,4 +100,94 @@ def test_start_disables_sensor_when_i2c_bus_is_unavailable():
     finally:
         sys.modules["busio"].I2C.side_effect = None
     assert sensor._accel is None
+    assert sensor.status()["connected"] is False
+
+
+def step_at(sensor, now, magnitude):
+    with patch("hardware.sensor.time.time", return_value=now):
+        if magnitude is None:
+            with patch.object(sensor, "_magnitude", return_value=None):
+                sensor._step()
+        else:
+            sensor._step(magnitude=magnitude)
+
+
+def continuous_steps(sensor, start, end, magnitude):
+    count = round((end - start) / POLL)
+    for index in range(count + 1):
+        step_at(sensor, start + index * POLL, magnitude)
+
+
+def queued_events(q):
+    events = []
+    while not q.empty():
+        events.append(q.get_nowait())
+    return events
+
+
+def test_failed_sample_resets_partial_confirmation():
+    from hardware.sensor import VibrationSensor
+
+    q = queue.Queue()
+    sensor = VibrationSensor(q)
+    continuous_steps(sensor, 0.0, 0.6, HIGH)
+    step_at(sensor, 0.62, None)
+
+    continuous_steps(sensor, 20.0, 21.98, HIGH)
+    assert q.empty()
+
+    step_at(sensor, 22.02, HIGH)
+    assert [type(event) for event in queued_events(q)] == [BrewStart]
+
+
+def test_outage_does_not_count_toward_end_silence():
+    from hardware.sensor import VibrationSensor
+
+    q = queue.Queue()
+    sensor = VibrationSensor(q)
+    continuous_steps(sensor, 0.0, 2.12, HIGH)
+    assert isinstance(q.get_nowait(), BrewStart)
+    step_at(sensor, 2.14, None)
+
+    continuous_steps(sensor, 30.0, 39.92, LOW)
+    assert q.empty()
+    step_at(sensor, 40.0, LOW)
+
+    event = q.get_nowait()
+    assert isinstance(event, BrewEnd)
+    assert event.started_at == 0.0
+    assert event.ended_at == pytest.approx(2.12)
+
+
+def test_late_sample_resets_partial_silence_debounce():
+    from hardware.sensor import VibrationSensor
+
+    q = queue.Queue()
+    sensor = VibrationSensor(q)
+    continuous_steps(sensor, 0.0, 2.12, HIGH)
+    assert isinstance(q.get_nowait(), BrewStart)
+    continuous_steps(sensor, 2.14, 5.0, LOW)
+
+    step_at(sensor, 30.0, LOW)
+    assert q.empty()
+    continuous_steps(sensor, 30.02, 39.92, LOW)
+    assert q.empty()
+    step_at(sensor, 40.0, LOW)
+    assert isinstance(q.get_nowait(), BrewEnd)
+
+
+def test_stop_releases_i2c_resources():
+    from hardware.sensor import VibrationSensor
+
+    sensor = VibrationSensor(queue.Queue())
+    accel = MagicMock()
+    i2c = MagicMock()
+    sensor._accel = accel
+    sensor._i2c = i2c
+    sensor._connected = True
+
+    assert sensor.stop() is True
+    accel.close.assert_called_once_with()
+    i2c.deinit.assert_called_once_with()
+    assert sensor._i2c is None
     assert sensor.status()["connected"] is False

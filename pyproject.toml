@@ -9,6 +9,7 @@ dependencies = [
     "fastapi",
     "uvicorn[standard]",
     "httpx",
+    "itsdangerous",
 ]
 
 [dependency-groups]
@@ -16,7 +17,8 @@ dev = ["pytest"]
 
 [project.scripts]
 crema = "cli.main:cli"
+crema-monitor = "ops.monitoring:main"
 
 [tool.setuptools]
 py-modules = ["config", "main"]
-packages   = ["core", "hardware", "cli", "api", "api.routers"]
+packages   = ["core", "hardware", "cli", "api", "api.routers", "devsim", "ops"]

@@ -62,7 +62,7 @@ The `VibrationSensor` polls at `ADXL_SAMPLE_RATE` Hz (default 50 Hz) and applies
 
 The `_step(magnitude=None)` method accepts an optional magnitude value for unit testing without hardware.
 
-The driver reconnects every five seconds after initialization or I2C read failures. Failed reads are skipped rather than treated as silence, preventing a transient disconnect from falsely ending a brew. Connection state, the last successful read, and the latest error are exposed through `/health` and the kiosk WebSocket.
+The driver reconnects every five seconds after initialization or I2C read failures. Failed reads and sampling gaps reset partial debounce rather than counting as vibration or silence, preventing a transient disconnect from falsely starting or ending a brew. Connection state, owner-thread liveness, the last successful read, staleness in seconds, and the latest error are exposed through `/health` and the kiosk WebSocket.
 
 ## QR scanner (`hardware/scanner.py`)
 

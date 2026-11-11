@@ -1,5 +1,5 @@
 import sqlite3
-from typing import Optional
+from typing import Literal, Optional
 from fastapi import APIRouter, Depends, Query
 from api.deps import get_db
 from api.schemas import Brew
@@ -10,7 +10,9 @@ router = APIRouter()
 @router.get("/", response_model=list[Brew])
 def list_brews(
     user: Optional[str] = Query(None),
-    kind: Optional[str] = Query(None),
+    kind: Optional[Literal["brew", "noise"]] = Query(None),
+    shot_type: Optional[Literal["single", "double"]] = Query(None),
+    decaf: Optional[bool] = Query(None),
     limit: int = Query(50, ge=1, le=500),
     from_ts: Optional[float] = Query(None),
     to_ts: Optional[float] = Query(None),
@@ -20,15 +22,21 @@ def list_brews(
     params: list = []
 
     if user:
-        clauses.append("u.name = ?")
+        clauses.append("COALESCE(u.name, 'anonymous') = ?")
         params.append(user)
     if kind:
         clauses.append("b.kind = ?")
         params.append(kind)
-    if from_ts:
+    if shot_type:
+        clauses.append("b.shot_type = ?")
+        params.append(shot_type)
+    if decaf is not None:
+        clauses.append("b.decaf = ?")
+        params.append(int(decaf))
+    if from_ts is not None:
         clauses.append("b.started_at >= ?")
         params.append(from_ts)
-    if to_ts:
+    if to_ts is not None:
         clauses.append("b.started_at <= ?")
         params.append(to_ts)
 

@@ -1,12 +1,24 @@
-import { api } from "../api"
-import { usePolling } from "../hooks/usePolling"
 import { useElapsed } from "../hooks/useElapsed"
+import type { Status } from "../types"
 
-export function StatusBadge() {
-  const { data: status } = usePolling(api.status, 5000)
+type Props = {
+  status: Status | null
+  error: string | null
+  loading: boolean
+  stale: boolean
+}
+
+export function StatusBadge({ status, error, loading, stale }: Props) {
   const elapsed = useElapsed(status?.brew_started_at ?? status?.session_started_at ?? null)
 
-  if (!status) return <span className="font-plex text-sm text-faint">—</span>
+  if (error) {
+    return (
+      <span className="font-plex text-sm text-muted" role="alert" title={error}>
+        {stale && status ? "Status update failed. Showing the last known state." : "Status unavailable. Retrying..."}
+      </span>
+    )
+  }
+  if (loading || !status) return <span className="font-plex text-sm text-faint" role="status">Loading status...</span>
 
   if (status.state === "idle")
     return <span className="font-plex text-sm text-muted">idle</span>
@@ -14,7 +26,7 @@ export function StatusBadge() {
   if (status.state === "ready")
     return (
       <span className="font-plex text-sm text-muted">
-        {status.user} — ready to brew
+        {status.user} - ready to brew
       </span>
     )
 
@@ -24,7 +36,7 @@ export function StatusBadge() {
         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-crema-400 opacity-60" />
         <span className="relative inline-flex rounded-full h-2 w-2 bg-crema-500" />
       </span>
-      {status.user} — {elapsed}
+      {status.user} - {elapsed}
     </span>
   )
 }

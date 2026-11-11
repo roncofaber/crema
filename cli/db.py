@@ -2,10 +2,16 @@ import csv
 import os
 import sys
 import time
+from contextlib import closing
 
 import click
 
-from config import DB_PATH, MIN_BREW_DURATION
+from config import (
+    BACKUP_RETENTION_COUNT,
+    BACKUP_RETENTION_DAYS,
+    DB_PATH,
+    MIN_BREW_DURATION,
+)
 import core.db as core_db
 
 
@@ -24,43 +30,68 @@ def db():
 @db.command()
 def reclassify():
     """Reapply the current MIN_BREW_DURATION threshold to all existing entries."""
-    con = get_con()
-    to_brew = con.execute(
-        "SELECT COUNT(*) FROM brews WHERE duration >= ? AND kind = 'noise'",
-        (MIN_BREW_DURATION,),
-    ).fetchone()[0]
-    to_noise = con.execute(
-        "SELECT COUNT(*) FROM brews WHERE duration < ? AND kind = 'brew'",
-        (MIN_BREW_DURATION,),
-    ).fetchone()[0]
+    try:
+        with core_db.maintenance_lock(DB_PATH), closing(get_con()) as con:
+            to_brew = con.execute(
+                "SELECT COUNT(*) FROM brews WHERE duration >= ? AND kind = 'noise'",
+                (MIN_BREW_DURATION,),
+            ).fetchone()[0]
+            to_noise = con.execute(
+                "SELECT COUNT(*) FROM brews WHERE duration < ? AND kind = 'brew'",
+                (MIN_BREW_DURATION,),
+            ).fetchone()[0]
 
-    if not to_brew and not to_noise:
-        click.echo("Nothing to reclassify.")
-        con.close()
-        return
+            if not to_brew and not to_noise:
+                click.echo("Nothing to reclassify.")
+                return
 
-    click.echo(f"Will reclassify {to_brew} noise -> brew, {to_noise} brew -> noise.")
-    click.confirm("Proceed?", abort=True)
+            click.echo(f"Will reclassify {to_brew} noise -> brew, {to_noise} brew -> noise.")
+            click.confirm("Proceed?", abort=True)
 
-    con.execute(
-        "UPDATE brews SET kind = 'brew' WHERE duration >= ? AND kind = 'noise'",
-        (MIN_BREW_DURATION,),
-    )
-    con.execute(
-        "UPDATE brews SET kind = 'noise' WHERE duration < ? AND kind = 'brew'",
-        (MIN_BREW_DURATION,),
-    )
-    con.commit()
-    click.echo("Done.")
-    con.close()
+            with con:
+                con.execute("BEGIN IMMEDIATE")
+                con.execute(
+                    "UPDATE brews SET kind = 'brew' WHERE duration >= ? AND kind = 'noise'",
+                    (MIN_BREW_DURATION,),
+                )
+                con.execute(
+                    """
+                    UPDATE brews
+                    SET kind = 'noise', shot_type = NULL, decaf = NULL, rating = NULL
+                    WHERE duration < ? AND kind = 'brew'
+                    """,
+                    (MIN_BREW_DURATION,),
+                )
+            click.echo("Done.")
+    except core_db.MaintenanceLockError as exc:
+        raise click.ClickException(
+            "Database is in use. Stop CREMA services before reclassifying."
+        ) from exc
 
 
 @db.command()
 @click.argument("output", required=False, type=click.Path(dir_okay=False))
-def backup(output):
-    """Create a consistent SQLite backup."""
+@click.option("--keep", type=click.IntRange(min=1), default=BACKUP_RETENTION_COUNT, show_default=True)
+def backup(output, keep):
+    """Create a verified SQLite backup and prune older generated backups."""
     path = core_db.backup_database(output)
-    click.echo(f"Backup created: {path}")
+    click.echo(f"Backup created and verified: {path}")
+    if output is None:
+        removed = core_db.prune_backups(keep=keep, max_age_days=BACKUP_RETENTION_DAYS)
+        if removed:
+            click.echo(f"Removed {len(removed)} expired backups.")
+
+
+@db.command()
+@click.argument("directory", required=False, type=click.Path(file_okay=False))
+@click.option("--keep", type=click.IntRange(min=1), default=BACKUP_RETENTION_COUNT, show_default=True)
+@click.option("--max-age-days", type=click.IntRange(min=0), default=BACKUP_RETENTION_DAYS, show_default=True)
+def cleanup(directory, keep, max_age_days):
+    """Prune only CREMA timestamped backups by count and optional age."""
+    removed = core_db.prune_backups(directory, keep=keep, max_age_days=max_age_days)
+    for path in removed:
+        click.echo(f"Removed: {path}")
+    click.echo(f"Removed {len(removed)} backups.")
 
 
 @db.command(name="check")
@@ -79,9 +110,14 @@ def restore(source):
     """Replace the live database from a verified backup."""
     click.echo(f"Will replace {DB_PATH} with {source}.")
     click.confirm("Proceed?", abort=True)
-    safety_backup = core_db.backup_database() if os.path.isfile(DB_PATH) else None
     try:
-        core_db.restore_database(source)
+        with core_db.maintenance_lock(DB_PATH):
+            safety_backup = core_db.backup_database() if os.path.isfile(DB_PATH) else None
+            core_db.restore_database(source)
+    except core_db.MaintenanceLockError as exc:
+        raise click.ClickException(
+            "Database is in use. Stop CREMA services before restoring."
+        ) from exc
     except Exception as exc:
         raise click.ClickException(str(exc)) from exc
     click.echo("Database restored successfully.")
@@ -93,24 +129,23 @@ def restore(source):
 @click.argument("output", default="-", type=click.Path())
 def export(output):
     """Export all brews to CSV. Use - for stdout."""
-    con = get_con()
-    rows = con.execute("""
-        SELECT
-            b.id,
-            COALESCE(u.name, 'anonymous') AS user,
-            b.started_at,
-            b.ended_at,
-            b.duration,
-            b.kind,
-            b.shot_type,
-            b.decaf,
-            b.rating
-        FROM brews b
-        LEFT JOIN sessions s ON b.session_id = s.id
-        LEFT JOIN users u    ON s.user_id    = u.id
-        ORDER BY b.started_at
-    """).fetchall()
-    con.close()
+    with closing(get_con()) as con:
+        rows = con.execute("""
+            SELECT
+                b.id,
+                COALESCE(u.name, 'anonymous') AS user,
+                b.started_at,
+                b.ended_at,
+                b.duration,
+                b.kind,
+                b.shot_type,
+                b.decaf,
+                b.rating
+            FROM brews b
+            LEFT JOIN sessions s ON b.session_id = s.id
+            LEFT JOIN users u    ON s.user_id    = u.id
+            ORDER BY b.started_at
+        """).fetchall()
 
     def fmt_ts(ts):
         return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(ts)) if ts else ""

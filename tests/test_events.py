@@ -1,3 +1,7 @@
+from dataclasses import FrozenInstanceError
+
+import pytest
+
 from core.events import QRScanned, BrewStart, BrewEnd
 
 
@@ -19,8 +23,5 @@ def test_brew_start_is_instantiable():
 
 def test_events_are_immutable():
     e = QRScanned(token="user@example.com")
-    try:
+    with pytest.raises(FrozenInstanceError):
         e.token = "other@example.com"
-        assert False, "should have raised FrozenInstanceError"
-    except Exception:
-        pass  # expected

@@ -1,21 +1,33 @@
 import asyncio
 from contextlib import asynccontextmanager, suppress
 import os
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from api.auth import verify_token
+from starlette.middleware.sessions import SessionMiddleware
+from api.auth import auth_mode, cors_origins, session_cookie_secure, session_secret, session_ttl, validate_auth_configuration, verify_token
+from api.routers import auth as auth_router
 from api.routers import health, users, brews, stats, status, kiosk as kiosk_router
+from api.routers import metrics as metrics_router
+from api.schemas import RootResponse
 import core.kiosk as kiosk
 import core.db as db
+from core import monitoring
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    validate_auth_configuration()
     db.init_db()
     start_hardware = os.getenv("CREMA_START_HARDWARE") == "1"
-    if start_hardware:
+    start_simulator = os.getenv("CREMA_DEV_SIMULATOR") == "1"
+    if start_hardware and start_simulator:
+        raise RuntimeError("The development simulator cannot run with hardware ownership enabled")
+    if start_simulator:
+        import devsim
+        devsim.start()
+    elif start_hardware:
         kiosk.start()
     broadcaster = asyncio.create_task(kiosk.broadcast_loop())
     try:
@@ -24,17 +36,42 @@ async def lifespan(app: FastAPI):
         broadcaster.cancel()
         with suppress(asyncio.CancelledError):
             await broadcaster
-        if start_hardware:
+        if start_hardware or start_simulator:
             kiosk.stop()
 
 
 app = FastAPI(title="CREMA API", lifespan=lifespan)
 
+
+@app.middleware("http")
+async def collect_request_metrics(request: Request, call_next):
+    try:
+        response = await call_next(request)
+    except Exception:
+        route = request.scope.get("route")
+        monitoring.record_http_request(request.method, getattr(route, "path", None), 500)
+        raise
+    route = request.scope.get("route")
+    monitoring.record_http_request(request.method, getattr(route, "path", None), response.status_code)
+    return response
+
+
+if auth_mode() == "session":
+    app.add_middleware(
+        SessionMiddleware,
+        secret_key=session_secret(),
+        session_cookie="crema_session",
+        max_age=session_ttl(),
+        same_site="strict",
+        https_only=session_cookie_secure(),
+    )
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins(),
     allow_methods=["*"],
     allow_headers=["*"],
+    allow_credentials=True,
 )
 
 _auth = [Depends(verify_token)]
@@ -43,11 +80,16 @@ app.include_router(users.router,  prefix="/users",  tags=["users"],  dependencie
 app.include_router(brews.router,  prefix="/brews",  tags=["brews"],  dependencies=_auth)
 app.include_router(stats.router,  prefix="/stats",  tags=["stats"],  dependencies=_auth)
 app.include_router(status.router,                   tags=["status"], dependencies=_auth)
+app.include_router(auth_router.router)
 app.include_router(health.router,                   tags=["health"])
+app.include_router(metrics_router.router, tags=["monitoring"])
 app.include_router(kiosk_router.router, tags=["kiosk"])
+if os.getenv("CREMA_DEV_SIMULATOR") == "1":
+    import devsim
+    app.include_router(devsim.router())
 
 
-@app.get("/")
+@app.get("/", response_model=RootResponse)
 def root():
     return {"status": "ok"}
 

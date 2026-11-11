@@ -4,6 +4,7 @@ from enum import Enum, auto
 import time
 import core.db as db
 from core.events import QRScanned, BrewStart, BrewEnd
+from core import monitoring
 from config import (
     ARMED_TIMEOUT, SESSION_TIMEOUT, SUMMARY_DURATION, MIN_BREW_DURATION
 )
@@ -78,7 +79,19 @@ class SessionState:
         self._on_broadcast(self._snapshot_unlocked())
 
     def transition(self, new_state: State):
-        log.info("state %s -> %s", self.state.name, new_state.name)
+        previous = self.state
+        log.info(
+            "Kiosk state transition",
+            extra={
+                "event": "kiosk_transition",
+                "from_state": previous.name.lower(),
+                "to_state": new_state.name.lower(),
+            },
+        )
+        if previous != new_state:
+            monitoring.record_transition(previous.name, new_state.name)
+        if new_state == State.SUMMARY and self.state != State.SUMMARY and self._session_id is not None:
+            db.end_session(self._session_id)
         self.state        = new_state
         self._state_since = time.time()
         self._broadcast()
@@ -86,23 +99,52 @@ class SessionState:
     def time_in_state(self) -> float:
         return time.time() - self._state_since
 
-    def set_brew_options(self, shot_type: str, decaf: bool):
+    def _load_brew_preferences(self):
+        self._shot_type = self._user.get("preferred_shot_type") or "double"
+        self._decaf = bool(self._user.get("preferred_decaf", False))
+
+    def set_brew_options(self, shot_type: str, decaf: bool, session_started_at: float) -> bool:
         with self._lock:
+            if (
+                self.state not in {State.ARMED, State.BREWING}
+                or self._session_started_at != session_started_at
+            ):
+                return False
+            if not db.update_user_preferences(self._user["id"], shot_type, decaf):
+                raise RuntimeError("Cannot save preferences for the current user")
             self._shot_type = shot_type
             self._decaf = decaf
+            self._user["preferred_shot_type"] = shot_type
+            self._user["preferred_decaf"] = decaf
             self._broadcast()
+            return True
 
-    def force_logout(self):
+    def force_logout(self, session_started_at: float | None = None) -> bool:
         with self._lock:
-            if self.state == State.ARMED:
-                if self._brew_count:
-                    self._avg_rating = db.get_session_avg_rating(self._session_id)
-                    self._summary_shown_at = time.time()
-                    self.transition(State.SUMMARY)
-                else:
-                    db.end_session(self._session_id)
-                    self._reset()
-                    self.transition(State.IDLE)
+            if self.state != State.ARMED:
+                return False
+            if (
+                session_started_at is not None
+                and self._session_started_at != session_started_at
+            ):
+                return False
+            if self._brew_count:
+                self._avg_rating = db.get_session_avg_rating(self._session_id)
+                self._summary_shown_at = time.time()
+                self.transition(State.SUMMARY)
+            else:
+                db.end_session(self._session_id)
+                self._reset()
+                self.transition(State.IDLE)
+            return True
+
+    def shutdown(self):
+        with self._lock:
+            if self._session_id is not None:
+                db.end_session(self._session_id)
+            self._reset()
+            if self.state != State.IDLE:
+                self.transition(State.IDLE)
 
     def handle(self, event):
         with self._lock:
@@ -145,7 +187,6 @@ class SessionState:
 
         elif self.state == State.SUMMARY:
             if self._summary_shown_at and now - self._summary_shown_at >= SUMMARY_DURATION:
-                db.end_session(self._session_id)
                 self._reset()
                 self.transition(State.IDLE)
 
@@ -169,9 +210,8 @@ class SessionState:
             self._brew_count = 0
             self._session_brew_time = 0.0
             self._last_brew_at = None
-            self._shot_type = "double"
-            self._decaf = False
             self._last_brew_id = None
+            self._load_brew_preferences()
             self.transition(State.ARMED)
 
         elif self.state == State.ARMED:
@@ -189,9 +229,8 @@ class SessionState:
                 self._brew_count = 0
                 self._session_brew_time = 0.0
                 self._last_brew_at = None
-                self._shot_type = "double"
-                self._decaf = False
                 self._last_brew_id = None
+                self._load_brew_preferences()
                 self.transition(State.ARMED)
 
         elif self.state == State.BREWING:
@@ -214,7 +253,15 @@ class SessionState:
 
     def _on_brew_end(self, event: BrewEnd):
         kind = "brew" if event.duration >= MIN_BREW_DURATION else "noise"
-        log.info("brew ended: duration=%.1fs kind=%s", event.duration, kind)
+        monitoring.record_brew(kind)
+        log.info(
+            "Brew result observed",
+            extra={
+                "event": "brew_result",
+                "duration_seconds": event.duration,
+                "kind": kind,
+            },
+        )
 
         if self.state == State.BREWING:
             brew_id = db.log_brew(
@@ -240,9 +287,8 @@ class SessionState:
                 self._brew_count = 0
                 self._session_brew_time = 0.0
                 self._last_brew_at = None
-                self._shot_type = "double"
-                self._decaf = False
                 self._last_brew_id = None
+                self._load_brew_preferences()
                 self.transition(State.ARMED)
             else:
                 self.transition(State.ARMED)
@@ -254,6 +300,7 @@ class SessionState:
                 self._user = user
                 self._session_id = db.start_session(user["id"], event.started_at)
                 self._session_started_at = event.started_at
+                self._load_brew_preferences()
                 brew_id = db.log_brew(
                     self._session_id, event.started_at, event.ended_at, kind,
                     shot_type=self._shot_type if kind == "brew" else None,

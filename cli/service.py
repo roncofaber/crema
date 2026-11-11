@@ -4,8 +4,19 @@ import click
 _SERVICES = ["crema-kiosk", "crema-browser"]
 
 
+def _run(command: list[str]):
+    try:
+        result = subprocess.run(command)
+    except OSError as exc:
+        raise click.ClickException(f"Cannot run {command[0]}: {exc}") from exc
+    if result.returncode:
+        raise click.ClickException(
+            f"Command exited with status {result.returncode}: {' '.join(command)}"
+        )
+
+
 def _systemctl(action: str, services: list[str]):
-    subprocess.run(["sudo", "systemctl", action] + services)
+    _run(["sudo", "systemctl", action] + services)
 
 
 @click.group()
@@ -34,4 +45,4 @@ def start():
 @service.command()
 def status():
     """Show status of kiosk and browser services."""
-    subprocess.run(["sudo", "systemctl", "status", "--no-pager"] + _SERVICES)
+    _run(["sudo", "systemctl", "status", "--no-pager"] + _SERVICES)

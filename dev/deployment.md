@@ -2,7 +2,7 @@
 
 ## Target
 
-Raspberry Pi 4 running Raspberry Pi OS (bookworm). Python 3.11+. Node 20.19+ or 22.12+ for building the dashboard.
+Raspberry Pi 4 running Raspberry Pi OS (bookworm). Python 3.11+. Node 24.15.0 or newer for building the dashboard.
 
 ## Services
 
@@ -49,20 +49,37 @@ cd ~/crema
 
 Pulls latest code, rebuilds dashboard, reinstalls package, restarts both services.
 
-If the live database exists, the update script creates a consistent timestamped backup in `data/backups/` before pulling code.
+If the live database exists, the update script creates a consistent, integrity-verified timestamped backup before pulling code, then applies configured retention. Export the same `CREMA_DB_PATH` and `CREMA_BACKUP_DIR` values used by the service so maintenance targets the configured database rather than only the default paths. `CREMA_BACKUP_RETENTION_COUNT` defaults to 14; `CREMA_BACKUP_RETENTION_DAYS` defaults to 0, which disables age pruning. Stop `crema-kiosk` before `crema db restore`; restore acquires the service lock and refuses to replace the database while it's running. See `docs/operations.md` for retention and recovery details.
 
 ## Environment
 
-Set `CREMA_API_TOKEN` in `/etc/systemd/system/crema-kiosk.service.d/env.conf` (create the drop-in):
+The service binds to `127.0.0.1` by default, which is sufficient for the local Chromium kiosk. To expose the dashboard on the LAN, set `CREMA_HOST` and `CREMA_API_TOKEN` in `/etc/systemd/system/crema-kiosk.service.d/env.conf` (create the drop-in):
 
 ```ini
 [Service]
+Environment=CREMA_HOST=0.0.0.0
 Environment=CREMA_API_TOKEN=your-secret-token
 ```
 
 Then: `sudo systemctl daemon-reload && sudo systemctl restart crema-kiosk`
 
-The browser bundle also needs the token when authentication is enabled. Export the same value before installing or updating so the build receives it automatically:
+Non-loopback startup fails without a token or complete session-auth configuration unless `CREMA_ALLOW_INSECURE=1` is explicitly configured. Keep that override limited to controlled networks.
+
+For optional password sessions, use this drop-in instead of embedding a browser token:
+
+```ini
+[Service]
+Environment=CREMA_HOST=0.0.0.0
+Environment=CREMA_AUTH_MODE=session
+Environment=CREMA_ADMIN_PASSWORD=replace-with-a-long-password
+Environment=CREMA_SESSION_SECRET=replace-with-at-least-32-random-bytes
+```
+
+The dashboard and kiosk use an HttpOnly, Strict session cookie. In this mode, the touch kiosk displays a compact administrator sign-in screen before enabling controls; an expired or revoked session returns it to that screen. `CREMA_SESSION_TTL` defaults to 43200 seconds. Session cookies default to HTTPS-only, so deploy HTTPS for LAN access or, only for local HTTP development, set `CREMA_COOKIE_SECURE=0`. Do not disable the secure-cookie requirement on an untrusted network.
+
+The kiosk unit uses `Restart=always`. A fatal hardware-loop error requests a graceful `SIGTERM`, and systemd starts a fresh owner after five seconds; a clean stop still terminates the process and would also be restarted unless the service is stopped through systemctl.
+
+In token mode, the browser bundle also needs the token. Export the same value before installing or updating so the build receives it automatically:
 
 ```bash
 export CREMA_API_TOKEN=your-secret-token
@@ -78,7 +95,9 @@ sudo raspi-config  # Interface Options, then I2C, then Enable
 sudo reboot
 ```
 
-## Logs
+## Logs and monitoring
+
+Set `CREMA_LOG_LEVEL`, `CREMA_LOG_FORMAT=jsonl`, and optionally `CREMA_LOG_FILE` in the kiosk service drop-in for structured runtime logs. The default text output continues to flow to the journal. File logs are append-only and need external rotation. The passive `crema-monitor` command can record selected metrics and systemd state without controlling either service. Configuration, Prometheus scraping, and JSONL examples are in `docs/operations.md`.
 
 ```bash
 crema logs kiosk    # follow crema-kiosk journal

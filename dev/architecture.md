@@ -75,10 +75,11 @@ Snapshots are best-effort. If the queue is full during a burst, the new update i
 
 `CREMA_API_TOKEN` environment variable:
 
-- Unset: auth is disabled for local development or trusted LAN use.
-- Set: data and control REST routes require `Authorization: Bearer <token>`.
+- Loopback serving works without a token for local development.
+- Non-loopback serving requires `CREMA_API_TOKEN`, or explicit `CREMA_ALLOW_INSECURE=1` for controlled networks.
+- When a token is set, data and control REST routes require `Authorization: Bearer <token>`.
 
-The browser bundle must receive the same value as `VITE_API_TOKEN` at build time. Browser tokens are visible to users, so this mode is intended for trusted local networks. `/`, `/health`, and `/ws/kiosk` remain public so the browser and service monitors can connect.
+The browser bundle must receive the same value as `VITE_API_TOKEN` at build time. Browser tokens are visible to users, so this mode is intended for trusted local networks. `/` and `/health` remain public. The WebSocket does not use bearer authentication but accepts only same-host or explicitly allowed Origins. `CREMA_CORS_ORIGINS` supplies a comma-separated cross-origin allowlist for REST and WebSocket requests; the defaults cover Vite development, and an empty value disables cross-origin access.
 
 ## Database
 
@@ -86,13 +87,13 @@ SQLite defaults to `data/espresso.db` and can be moved with `CREMA_DB_PATH`. The
 
 Tables: `users`, `sessions`, `brews`, `schema_migrations`.
 
-Connections enable foreign keys and a five-second busy timeout. Startup enables WAL mode, records the schema version, and closes sessions left open by an unclean shutdown. Maintenance uses SQLite's online backup API through `crema db backup`, `crema db check`, and `crema db restore`.
+Connections enable foreign keys and a five-second busy timeout, and all helpers close them deterministically. Startup enables WAL mode and records the schema version without changing open sessions. Only the exclusive hardware owner recovers sessions left open by an unclean shutdown. Maintenance uses SQLite's online backup API through `crema db backup`, `crema db check`, and `crema db restore`. Restore requires a stopped service and validates the CREMA schema before replacing the database.
 
 ## Hardware lifecycle and readiness
 
 `CREMA_START_HARDWARE=1` makes the FastAPI lifespan start the scanner, sensor, and kiosk loop. Plain API development leaves it unset. Both device drivers retry after connection failures and expose state through `core.kiosk.get_health()`.
 
-`GET /health` reports database connectivity, process mode, loop status, and device connectivity. In hardware mode it returns HTTP 503 with `degraded` status until the loop and both devices are ready. The WebSocket includes the same hardware state so the kiosk can display a non-blocking warning.
+`GET /health` reports database connectivity, process mode, loop status, device connectivity, and device-thread liveness. In hardware mode it returns HTTP 503 with `degraded` status until the loop and both devices are ready, including when the sensor has no fresh sample for five seconds. The WebSocket includes the same hardware state so the kiosk can display a non-blocking warning.
 
 ## Static files
 

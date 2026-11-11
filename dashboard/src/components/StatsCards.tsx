@@ -10,7 +10,7 @@ function fmt(seconds: number): string {
 const LABELS = ["Today", "All time", "Users", "Total brew time", "Avg brew", "Avg rating", "Decaf", "Top brewer"]
 
 export function StatsCards() {
-  const { data: stats } = usePolling(api.stats, 30_000)
+  const { data: stats, error, loading, stale } = usePolling(api.stats, 30_000)
 
   const cards = stats
     ? [
@@ -21,18 +21,26 @@ export function StatsCards() {
         { label: "Avg brew",        value: `${Math.round(stats.average_duration)}s` },
         { label: "Avg rating",      value: stats.average_rating == null ? "-" : `${stats.average_rating.toFixed(1)} / 5` },
         { label: "Decaf",           value: stats.decaf_brews },
-        { label: "Top brewer",      value: stats.top_brewer ?? "—" },
+        { label: "Top brewer",      value: stats.top_brewer ?? "-" },
       ]
-    : LABELS.map(label => ({ label, value: "—" }))
+    : LABELS.map(label => ({ label, value: "-" }))
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-      {cards.map(c => (
-        <div key={c.label} className="bg-surface rounded p-5 border-t-2 border-crema-500">
-          <div className="font-plex text-3xl font-medium text-ink">{c.value}</div>
-          <div className="text-xs uppercase tracking-widest text-muted mt-2">{c.label}</div>
-        </div>
-      ))}
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4" aria-busy={loading}>
+        {cards.map(c => (
+          <div key={c.label} className="bg-surface rounded p-5 border-t-2 border-crema-500">
+            <div className="font-plex text-3xl font-medium text-ink">{c.value}</div>
+            <div className="text-xs uppercase tracking-widest text-muted mt-2">{c.label}</div>
+          </div>
+        ))}
+      </div>
+      {loading && !stats && <p role="status" className="text-center font-plex text-xs text-faint">Loading stats...</p>}
+      {error && (
+        <p role="alert" className="text-center font-plex text-xs text-muted" title={error}>
+          {stale && stats ? "Stats update failed. Showing the last update." : "Stats unavailable. Retrying..."}
+        </p>
+      )}
     </div>
   )
 }

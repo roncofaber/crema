@@ -1,4 +1,8 @@
-from pydantic import BaseModel
+from typing import Literal
+
+from pydantic import BaseModel, field_validator
+
+from core.identity import normalize_name, validate_token
 
 
 class User(BaseModel):
@@ -8,11 +12,23 @@ class User(BaseModel):
     total_brews: int
     total_time: float
     last_brew: float | None
+    preferred_shot_type: Literal["single", "double"] | None = None
+    preferred_decaf: bool | None = None
 
 
 class UserUpdate(BaseModel):
     name: str | None = None
     token: str | None = None
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value):
+        return normalize_name(value) if value is not None else None
+
+    @field_validator("token")
+    @classmethod
+    def validate_user_token(cls, value):
+        return validate_token(value) if value is not None else None
 
 
 class Brew(BaseModel):
@@ -21,10 +37,18 @@ class Brew(BaseModel):
     started_at: float
     ended_at: float
     duration: float
-    kind: str
-    shot_type: str | None = None
+    kind: Literal["brew", "noise"]
+    shot_type: Literal["single", "double"] | None = None
     decaf: bool | None = None
     rating: int | None = None
+
+
+class OkResponse(BaseModel):
+    ok: bool
+
+
+class RootResponse(BaseModel):
+    status: Literal["ok"]
 
 
 class OverallStats(BaseModel):
@@ -56,6 +80,8 @@ class DeviceHealth(BaseModel):
     error: str | None = None
     last_scan_at: float | None = None
     last_read_at: float | None = None
+    thread_alive: bool = False
+    stale_age: float | None = None
 
 
 class KioskHealth(BaseModel):

@@ -19,7 +19,7 @@ def overall_stats(db: sqlite3.Connection = Depends(get_db)):
     row = db.execute("""
         SELECT
             COUNT(CASE WHEN b.kind = 'brew' THEN 1 END)                          AS total_brews,
-            COUNT(DISTINCT CASE WHEN b.kind = 'brew' THEN s.user_id END)          AS total_users,
+            (SELECT COUNT(*) FROM users)                                          AS total_users,
             COALESCE(SUM(CASE WHEN b.kind = 'brew' THEN b.duration END), 0)       AS total_brew_time,
             COUNT(CASE WHEN b.kind = 'brew' AND b.started_at >= ? THEN 1 END)     AS today_brews,
             COALESCE(AVG(CASE WHEN b.kind = 'brew' THEN b.duration END), 0)       AS average_duration,

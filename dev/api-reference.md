@@ -2,7 +2,31 @@
 
 Base URL: `http://<pi>:8000`
 
-Auth: `Authorization: Bearer <CREMA_API_TOKEN>` on data and control REST endpoints when the env var is set. `/`, `/health`, and `/ws/kiosk` remain public.
+Auth: data, control, and metrics REST endpoints accept `Authorization: Bearer <CREMA_API_TOKEN>` when a token is configured. With `CREMA_AUTH_MODE=session`, they also accept the signed `crema_session` cookie after password login. `/`, `/health`, and `/auth/session` remain public. `/ws/kiosk` has no bearer token but requires a same-host or explicitly allowed Origin. Non-loopback serving requires a bearer token or a complete session-auth configuration unless `CREMA_ALLOW_INSECURE=1` is explicitly set. The generated machine-readable contract is `api/openapi.json`; regenerate it and the frontend types after API changes.
+
+---
+
+## Authentication
+
+### `GET /auth/session`
+
+Returns `{"mode":"token","authenticated":false}` in token mode. In session mode it reports whether the current signed cookie is valid and unexpired.
+
+### `POST /auth/login`
+
+Available only with `CREMA_AUTH_MODE=session`. Body: `{"password":"..."}`. A valid administrator password returns an HttpOnly, same-site Strict `crema_session` cookie and its expiration timestamp. Invalid passwords return 401; repeated failures can return 429 with `Retry-After`. Login and logout require a same-host or explicitly allowed Origin when an Origin header is present.
+
+### `POST /auth/logout`
+
+Clears the browser session and returns `{"ok":true}`. In token mode it is a no-op. Session-authenticated non-read API requests use the same Origin check. A configured bearer token remains available for automation in either mode.
+
+---
+
+## Metrics
+
+### `GET /api/metrics`
+
+Returns authenticated Prometheus text format `0.0.4`. Labels are limited to HTTP methods, status codes, registered route templates, finite kiosk states/events, brew kinds, and bounded disconnect reasons. No usernames, user tokens, session tokens, request query strings, or raw unmatched paths are exported. Process counters reset on restart; database gauges represent persisted records. See `docs/operations.md` for scraping and passive JSONL monitoring.
 
 ---
 
@@ -12,7 +36,7 @@ Auth: `Authorization: Bearer <CREMA_API_TOKEN>` on data and control REST endpoin
 
 Reports database connectivity, process mode, kiosk loop state, and scanner and sensor connectivity. This endpoint does not require authentication so service monitors can use it.
 
-Returns HTTP 200 with `status: "ok"` when ready. In hardware mode, a stopped kiosk loop or disconnected device returns HTTP 503 with `status: "degraded"`.
+Returns HTTP 200 with `status: "ok"` when ready. In hardware mode, a stopped kiosk loop, disconnected device, dead device thread, or sensor without a successful reading in the last five seconds returns HTTP 503 with `status: "degraded"`. `thread_alive` reports owner liveness and sensor `stale_age` is measured in seconds.
 
 ```json
 {
@@ -21,8 +45,8 @@ Returns HTTP 200 with `status: "ok"` when ready. In hardware mode, a stopped kio
   "database": {"connected": true},
   "kiosk": {
     "running": true,
-    "scanner": {"connected": true, "error": null},
-    "sensor": {"connected": true, "error": null}
+    "scanner": {"connected": true, "error": null, "last_scan_at": null, "thread_alive": true},
+    "sensor": {"connected": true, "error": null, "last_read_at": 1715000000.0, "thread_alive": true, "stale_age": 0.02}
   }
 }
 ```
@@ -64,11 +88,11 @@ Single user. `404` if not found.
 
 ### `PATCH /users/{name}`
 
-Rename user. Body: `{"name": "Alice"}`. `409` if name already taken.
+Rename user. Body: `{"name": "Alice"}`. Names are trimmed, nonempty, and limited to 80 characters. Tokens are trimmed, lowercased, and must be valid email addresses of at most 254 characters. `409` if the normalized name or token is already taken.
 
 ### `DELETE /users/{name}`
 
-Delete user and all their brews. `204` on success, `404` if not found.
+Delete user and all their brews. `204` on success, `404` if not found, and `409` if the user has an open session. Close or hand off the kiosk session before deletion.
 
 ### `GET /users/{name}/brews`
 
@@ -84,8 +108,12 @@ Recent brews. Query params:
 
 - `limit` (default 50, range 1 to 500)
 - `kind` (optional, typically `"brew"` or `"noise"`)
-- `user` - filter by user name
-- `from_ts` and `to_ts` (optional Unix timestamps)
+- `user` - exact, case-sensitive displayed user name; `anonymous` includes records without a user
+- `shot_type` - optional `single` or `double`
+- `decaf` - optional boolean
+- `from_ts` and `to_ts` - optional inclusive Unix timestamps
+
+Omit `kind` to return both brew and noise records.
 
 ```json
 [{"id": 1, "user": "alice", "kind": "brew", "duration": 28.4,
@@ -122,7 +150,14 @@ These endpoints control the live kiosk and require auth when `CREMA_API_TOKEN` i
 
 ### `POST /kiosk/logout`
 
-Force-end the current session. Only works in `ARMED` state; no-ops otherwise.
+Force-end the current session. Only works in `ARMED` state.
+
+Body:
+```json
+{"session_started_at": 1715000000.0}
+```
+
+`session_started_at` must match the current session snapshot, preventing a delayed logout from ending the next user's session after handoff. A stale session or a state that does not accept logout returns `409`.
 
 ```json
 {"ok": true}
@@ -136,10 +171,10 @@ Set sticky shot type and decaf flag for the current session.
 
 Body:
 ```json
-{"shot_type": "single", "decaf": true}
+{"shot_type": "single", "decaf": true, "session_started_at": 1715000000.0}
 ```
 
-`shot_type` must be `"single"` or `"double"`.
+`shot_type` must be `"single"` or `"double"`. `session_started_at` must match the current session snapshot, which prevents a delayed request from a previous user changing options after handoff. A stale session or a state that does not accept options returns `409`; refresh from the next snapshot before retrying.
 
 ### `POST /kiosk/rate`
 
@@ -158,9 +193,9 @@ Body:
 
 ### `WS /ws/kiosk`
 
-Real-time state stream. **No auth required.**
+Real-time state stream. No bearer token is required, but the request Origin must match the service host or an entry in `CREMA_CORS_ORIGINS`.
 
-Connect and receive JSON snapshots on every state change or 1 Hz tick. The server sends the current snapshot immediately on connect.
+Connect and receive JSON snapshots on every state change or 1 Hz tick. The server sends the current snapshot immediately on connect. If no kiosk state exists, the server closes the connection with a service-restarting code so the client can retry without showing a synthetic idle state.
 
 Snapshot shape:
 ```json
@@ -180,8 +215,8 @@ Snapshot shape:
   "brew_started_at": null,
   "hardware": {
     "running": true,
-    "scanner": {"connected": true, "error": null, "last_scan_at": 1715000000.0},
-    "sensor": {"connected": true, "error": null, "last_read_at": 1715000028.4}
+    "scanner": {"connected": true, "error": null, "last_scan_at": 1715000000.0, "thread_alive": true},
+    "sensor": {"connected": true, "error": null, "last_read_at": 1715000028.4, "thread_alive": true, "stale_age": 0.02}
   }
 }
 ```

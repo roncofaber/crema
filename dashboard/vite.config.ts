@@ -6,6 +6,7 @@ export default defineConfig({
   base: "/ui/",
   server: {
     proxy: {
+      "/auth":   "http://localhost:8000",
       "/users":  "http://localhost:8000",
       "/brews":  "http://localhost:8000",
       "/stats":  "http://localhost:8000",

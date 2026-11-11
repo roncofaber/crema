@@ -7,7 +7,7 @@ router = APIRouter()
 
 _USER_STATS_SQL = """
     SELECT
-        u.id, u.name, u.token,
+        u.id, u.name, u.token, u.preferred_shot_type, u.preferred_decaf,
         COUNT(CASE WHEN b.kind = 'brew' THEN 1 END)              AS total_brews,
         COALESCE(SUM(CASE WHEN b.kind = 'brew' THEN b.duration END), 0) AS total_time,
         MAX(CASE WHEN b.kind = 'brew' THEN b.ended_at END)       AS last_brew
@@ -35,28 +35,42 @@ def get_user(name: str, db: sqlite3.Connection = Depends(get_db)):
 
 @router.patch("/{name}", response_model=User)
 def update_user(name: str, body: UserUpdate, db: sqlite3.Connection = Depends(get_db)):
-    user = db.execute("SELECT id FROM users WHERE name = ?", (name,)).fetchone()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+    try:
+        with db:
+            db.execute("BEGIN IMMEDIATE")
+            user = db.execute(
+                "SELECT id, name, token FROM users WHERE name = ?", (name,)
+            ).fetchone()
+            if not user:
+                raise HTTPException(status_code=404, detail="User not found")
 
-    if body.name is not None:
-        taken = db.execute(
-            "SELECT id FROM users WHERE name = ? AND id != ?", (body.name, user["id"])
-        ).fetchone()
-        if taken:
-            raise HTTPException(status_code=409, detail="Name already taken")
-        db.execute("UPDATE users SET name = ? WHERE id = ?", (body.name, user["id"]))
+            new_name = body.name if body.name is not None else user["name"]
+            new_token = body.token if body.token is not None else user["token"]
 
-    if body.token is not None:
-        taken = db.execute(
-            "SELECT id FROM users WHERE token = ? AND id != ?", (body.token, user["id"])
-        ).fetchone()
-        if taken:
-            raise HTTPException(status_code=409, detail="Token already in use")
-        db.execute("UPDATE users SET token = ? WHERE id = ?", (body.token, user["id"]))
+            if new_name != user["name"]:
+                taken = db.execute(
+                    "SELECT id FROM users WHERE name = ? AND id != ?",
+                    (new_name, user["id"]),
+                ).fetchone()
+                if taken:
+                    raise HTTPException(status_code=409, detail="Name already taken")
 
-    db.commit()
-    return get_user(body.name or name, db)
+            if new_token != user["token"]:
+                taken = db.execute(
+                    "SELECT id FROM users WHERE token = ? AND id != ?",
+                    (new_token, user["id"]),
+                ).fetchone()
+                if taken:
+                    raise HTTPException(status_code=409, detail="Token already in use")
+
+            db.execute(
+                "UPDATE users SET name = ?, token = ? WHERE id = ?",
+                (new_name, new_token, user["id"]),
+            )
+    except sqlite3.IntegrityError as exc:
+        raise HTTPException(status_code=409, detail="Name or token already in use") from exc
+
+    return get_user(new_name, db)
 
 
 @router.get("/{name}/brews", response_model=list[Brew])
@@ -96,14 +110,21 @@ def get_user_brews(
 
 @router.delete("/{name}", status_code=204)
 def delete_user(name: str, db: sqlite3.Connection = Depends(get_db)):
-    user = db.execute("SELECT id FROM users WHERE name = ?", (name,)).fetchone()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    db.execute("""
-        DELETE FROM brews WHERE session_id IN (
-            SELECT id FROM sessions WHERE user_id = ?
-        )
-    """, (user["id"],))
-    db.execute("DELETE FROM sessions WHERE user_id = ?", (user["id"],))
-    db.execute("DELETE FROM users WHERE id = ?", (user["id"],))
-    db.commit()
+    with db:
+        db.execute("BEGIN IMMEDIATE")
+        user = db.execute("SELECT id FROM users WHERE name = ?", (name,)).fetchone()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        active = db.execute(
+            "SELECT 1 FROM sessions WHERE user_id = ? AND ended_at IS NULL LIMIT 1",
+            (user["id"],),
+        ).fetchone()
+        if active:
+            raise HTTPException(status_code=409, detail="User has an open session")
+        db.execute("""
+            DELETE FROM brews WHERE session_id IN (
+                SELECT id FROM sessions WHERE user_id = ?
+            )
+        """, (user["id"],))
+        db.execute("DELETE FROM sessions WHERE user_id = ?", (user["id"],))
+        db.execute("DELETE FROM users WHERE id = ?", (user["id"],))

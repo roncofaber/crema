@@ -1,5 +1,6 @@
 import sqlite3
 import time as time_mod
+from contextlib import closing
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -12,12 +13,13 @@ from api.deps import get_db
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     db_path = str(tmp_path / "test.db")
+    monkeypatch.delenv("CREMA_START_HARDWARE", raising=False)
     monkeypatch.setattr("core.db.DB_PATH", db_path)
     monkeypatch.setattr("api.deps.DB_PATH", db_path)
     db_module.init_db()
 
     def override_get_db():
-        con = sqlite3.connect(db_path)
+        con = db_module.get_connection(db_path, check_same_thread=False)
         con.row_factory = sqlite3.Row
         try:
             yield con
@@ -34,6 +36,18 @@ def test_list_users_empty(client):
     resp = client.get("/users/")
     assert resp.status_code == 200
     assert resp.json() == []
+
+
+def test_production_connection_pragmas(client):
+    dependency = get_db()
+    con = next(dependency)
+    try:
+        assert con.row_factory is sqlite3.Row
+        assert con.execute("PRAGMA foreign_keys").fetchone()[0] == 1
+        assert con.execute("PRAGMA busy_timeout").fetchone()[0] == 5000
+        assert con.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
+    finally:
+        dependency.close()
 
 
 def test_list_users(client):
@@ -73,6 +87,54 @@ def test_patch_user_name_conflict(client):
     assert resp.status_code == 409
 
 
+def test_patch_user_rejects_empty_name_without_mutation(client):
+    db_module.get_or_create_user("alice@example.com")
+    resp = client.patch("/users/alice", json={"name": "   "})
+    assert resp.status_code == 422
+    current = client.get("/users/alice")
+    assert current.status_code == 200
+    assert current.json()["name"] == "alice"
+    assert current.json()["token"] == "alice@example.com"
+
+
+def test_patch_user_rejects_unbounded_name(client):
+    db_module.get_or_create_user("alice@example.com")
+    resp = client.patch("/users/alice", json={"name": "x" * 81})
+    assert resp.status_code == 422
+    assert client.get("/users/alice").status_code == 200
+
+
+def test_patch_user_normalizes_name_and_token(client):
+    db_module.get_or_create_user("alice@example.com")
+    resp = client.patch(
+        "/users/alice",
+        json={"name": "  Alice  ", "token": "  ALICE@EXAMPLE.COM  "},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["name"] == "Alice"
+    assert resp.json()["token"] == "alice@example.com"
+    assert client.get("/users/Alice").status_code == 200
+
+
+def test_patch_user_rejects_invalid_token_without_mutation(client):
+    db_module.get_or_create_user("alice@example.com")
+    resp = client.patch("/users/alice", json={"token": "not-an-email"})
+    assert resp.status_code == 422
+    assert client.get("/users/alice").json()["token"] == "alice@example.com"
+
+
+def test_patch_user_token_conflict_rolls_back_name(client):
+    db_module.get_or_create_user("alice@example.com")
+    db_module.get_or_create_user("bob@example.com")
+    resp = client.patch(
+        "/users/alice",
+        json={"name": "charlie", "token": " BOB@EXAMPLE.COM "},
+    )
+    assert resp.status_code == 409
+    assert client.get("/users/alice").status_code == 200
+    assert client.get("/users/charlie").status_code == 404
+
+
 def test_list_brews_empty(client):
     resp = client.get("/brews/")
     assert resp.status_code == 200
@@ -104,6 +166,40 @@ def test_list_brews_filter_user(client):
     resp = client.get("/brews/?user=alice")
     assert resp.status_code == 200
     assert len(resp.json()) == 1
+
+
+def test_list_brews_filter_anonymous_includes_unowned_sessions(client):
+    anonymous_session = db_module.start_session(None)
+    db_module.log_brew(anonymous_session, 100, 125, "brew")
+    user = db_module.get_or_create_user("alice@example.com")
+    named_session = db_module.start_session(user["id"])
+    db_module.log_brew(named_session, 200, 225, "brew")
+
+    response = client.get("/brews/?user=anonymous")
+
+    assert response.status_code == 200
+    assert [(row["started_at"], row["user"]) for row in response.json()] == [
+        (100, "anonymous")
+    ]
+
+
+def test_list_brews_combines_shot_decaf_and_date_filters(client):
+    user = db_module.get_or_create_user("filters@example.com")
+    session_id = db_module.start_session(user["id"])
+    db_module.log_brew(session_id, 100, 125, "brew", shot_type="single", decaf=1)
+    db_module.log_brew(session_id, 200, 225, "brew", shot_type="single", decaf=0)
+    db_module.log_brew(session_id, 300, 325, "brew", shot_type="double", decaf=1)
+    db_module.log_brew(session_id, 400, 402, "noise", shot_type="single", decaf=1)
+
+    response = client.get(
+        "/brews/?shot_type=single&decaf=true&from_ts=50&to_ts=150"
+    )
+    assert response.status_code == 200
+    assert [row["started_at"] for row in response.json()] == [100]
+
+    response = client.get("/brews/?shot_type=single&decaf=false")
+    assert [row["started_at"] for row in response.json()] == [200]
+    assert client.get("/brews/?kind=invalid").status_code == 422
 
 
 def test_list_brews_filter_kind(client):
@@ -142,6 +238,17 @@ def test_overall_stats(client):
     assert data["total_brews"] == 1
     assert data["total_users"] == 1
     assert data["top_brewer"] == "alice"
+
+
+def test_overall_stats_counts_users_without_brews(client):
+    db_module.get_or_create_user("alice@example.com")
+    db_module.get_or_create_user("bob@example.com")
+    resp = client.get("/stats/")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total_users"] == 2
+    assert data["total_brews"] == 0
+    assert data["top_brewer"] is None
 
 
 def test_daily_stats(client):
@@ -262,9 +369,24 @@ def test_delete_user(client):
     alice = db_module.get_or_create_user("alice@example.com")
     sid = db_module.start_session(alice["id"])
     db_module.log_brew(sid, time_mod.time() - 30, time_mod.time(), "brew")
+    db_module.end_session(sid)
     resp = client.delete("/users/alice")
     assert resp.status_code == 204
     assert client.get("/users/alice").status_code == 404
+
+
+def test_delete_user_with_open_session_preserves_kiosk_state(client):
+    alice = db_module.get_or_create_user("alice@example.com")
+    db_module.start_session(alice["id"])
+    with patch("core.kiosk.get_state", side_effect=AssertionError("hardware accessed")) as state:
+        resp = client.delete("/users/alice")
+    assert resp.status_code == 409
+    state.assert_not_called()
+    assert client.get("/users/alice").status_code == 200
+    status = client.get("/status")
+    assert status.status_code == 200
+    assert status.json()["state"] == "ready"
+    assert status.json()["user"] == "alice"
 
 
 def test_delete_user_not_found(client):
@@ -301,24 +423,48 @@ def test_auth_invalid_token(client, monkeypatch):
 def test_kiosk_logout_no_state(client):
     """Returns 503 when kiosk hardware is not running."""
     with patch("api.routers.kiosk.kiosk.get_state", return_value=None):
-        resp = client.post("/kiosk/logout")
+        resp = client.post("/kiosk/logout", json={"session_started_at": 1000.0})
     assert resp.status_code == 503
 
 
 def test_kiosk_logout_calls_force_logout(client):
     mock_state = MagicMock()
+    mock_state.force_logout.return_value = True
     with patch("api.routers.kiosk.kiosk.get_state", return_value=mock_state):
-        resp = client.post("/kiosk/logout")
+        resp = client.post("/kiosk/logout", json={"session_started_at": 1000.0})
     assert resp.status_code == 200
-    mock_state.force_logout.assert_called_once()
+    mock_state.force_logout.assert_called_once_with(1000.0)
+
+
+def test_kiosk_logout_rejects_stale_session(client):
+    mock_state = MagicMock()
+    mock_state.force_logout.return_value = False
+    with patch("api.routers.kiosk.kiosk.get_state", return_value=mock_state):
+        resp = client.post("/kiosk/logout", json={"session_started_at": 999.0})
+    assert resp.status_code == 409
 
 
 def test_kiosk_brew_options(client):
     mock_state = MagicMock()
+    mock_state.set_brew_options.return_value = True
     with patch("api.routers.kiosk.kiosk.get_state", return_value=mock_state):
-        resp = client.post("/kiosk/brew-options", json={"shot_type": "single", "decaf": True})
+        resp = client.post(
+            "/kiosk/brew-options",
+            json={"shot_type": "single", "decaf": True, "session_started_at": 1000.0},
+        )
     assert resp.status_code == 200
-    mock_state.set_brew_options.assert_called_once_with("single", True)
+    mock_state.set_brew_options.assert_called_once_with("single", True, 1000.0)
+
+
+def test_kiosk_brew_options_rejects_stale_session(client):
+    mock_state = MagicMock()
+    mock_state.set_brew_options.return_value = False
+    with patch("api.routers.kiosk.kiosk.get_state", return_value=mock_state):
+        resp = client.post(
+            "/kiosk/brew-options",
+            json={"shot_type": "single", "decaf": True, "session_started_at": 999.0},
+        )
+    assert resp.status_code == 409
 
 
 def test_kiosk_rate_valid(client):
@@ -328,7 +474,7 @@ def test_kiosk_rate_valid(client):
     brew_id = db_module.log_brew(sid, now - 30, now, "brew")
     resp = client.post("/kiosk/rate", json={"brew_id": brew_id, "rating": 4})
     assert resp.status_code == 200
-    with db_module.get_connection() as con:
+    with closing(db_module.get_connection()) as con:
         row = con.execute("SELECT rating FROM brews WHERE id=?", (brew_id,)).fetchone()
     assert row[0] == 4
 

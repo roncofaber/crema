@@ -1,17 +1,19 @@
 import logging
-import re
+import select
 import threading
 import time
 from queue import Queue
+
 from core.events import QRScanned
+from core.identity import is_email, normalize_token
 
 log = logging.getLogger(__name__)
 
-_EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+POLL_TIMEOUT = 0.2
 
 
 def _is_email(token: str) -> bool:
-    return bool(_EMAIL_RE.match(token.strip()))
+    return is_email(token)
 
 
 class QRScanner:
@@ -22,7 +24,7 @@ class QRScanner:
     """
 
     def __init__(self, queue: Queue, device_path: str = None):
-        self._queue       = queue
+        self._queue = queue
         self._configured_path = device_path
         self._device = None
         self._stop = threading.Event()
@@ -37,19 +39,19 @@ class QRScanner:
 
     def stop(self):
         self._stop.set()
-        if self._device is not None:
-            try:
-                self._device.close()
-            except Exception:
-                pass
         if self._thread.is_alive():
             self._thread.join(timeout=2)
+        if self._thread.is_alive():
+            log.error("scanner thread did not stop within 2 s")
+            return False
+        return True
 
     def status(self) -> dict:
         return {
             "connected": self._connected,
             "last_scan_at": self._last_scan_at,
             "error": self._last_error,
+            "thread_alive": self._thread.is_alive(),
         }
 
     def _find_device_path(self) -> str | None:
@@ -57,10 +59,14 @@ class QRScanner:
         from config import SCANNER_DEVICE_NAME
         for path in list_devices():
             try:
-                if InputDevice(path).name == SCANNER_DEVICE_NAME:
-                    return path
-            except Exception as e:
-                log.debug("could not open input device %s: %s", path, e)
+                device = InputDevice(path)
+                try:
+                    if device.name == SCANNER_DEVICE_NAME:
+                        return path
+                finally:
+                    device.close()
+            except Exception as exc:
+                log.debug("could not open input device %s: %s", path, exc)
                 continue
         return None
 
@@ -97,47 +103,51 @@ class QRScanner:
     def _run_evdev(self, path: str):
         from evdev import InputDevice, categorize, ecodes, KeyEvent
 
-        _KEYMAP = {
+        keymap = {
             **{f"KEY_{c}": (c.lower(), c.upper()) for c in "ABCDEFGHIJKLMNOPQRSTUVWXYZ"},
             "KEY_1": ("1", "!"), "KEY_2": ("2", "@"), "KEY_3": ("3", "#"),
             "KEY_4": ("4", "$"), "KEY_5": ("5", "%"), "KEY_6": ("6", "^"),
             "KEY_7": ("7", "&"), "KEY_8": ("8", "*"), "KEY_9": ("9", "("),
             "KEY_0": ("0", ")"),
-            "KEY_MINUS":  ("-", "_"),
-            "KEY_EQUAL":  ("=", "+"),
-            "KEY_DOT":    (".", ">"),
-            "KEY_AT":     ("@", "@"),
+            "KEY_MINUS": ("-", "_"),
+            "KEY_EQUAL": ("=", "+"),
+            "KEY_DOT": (".", ">"),
+            "KEY_AT": ("@", "@"),
         }
-        _SHIFT_KEYS = {"KEY_LEFTSHIFT", "KEY_RIGHTSHIFT"}
+        shift_keys = {"KEY_LEFTSHIFT", "KEY_RIGHTSHIFT"}
 
         device = InputDevice(path)
         self._device = device
         device.grab()
         self._connected = True
         self._last_error = None
-        buffer  = []
+        buffer = []
         shifted = False
 
-        for event in device.read_loop():
-            if event.type != ecodes.EV_KEY:
+        while not self._stop.is_set():
+            readable, _, _ = select.select([device], [], [], POLL_TIMEOUT)
+            if not readable:
                 continue
-            key = categorize(event)
-            if key.keystate == KeyEvent.key_down:
-                code = key.keycode if isinstance(key.keycode, str) else key.keycode[0]
-                if code in _SHIFT_KEYS:
-                    shifted = True
-                elif code == "KEY_ENTER":
-                    self._handle_raw("".join(buffer))
-                    buffer.clear()
-                elif code in _KEYMAP:
-                    buffer.append(_KEYMAP[code][1 if shifted else 0])
-            elif key.keystate == KeyEvent.key_up:
-                code = key.keycode if isinstance(key.keycode, str) else key.keycode[0]
-                if code in _SHIFT_KEYS:
-                    shifted = False
+            for event in device.read():
+                if event.type != ecodes.EV_KEY:
+                    continue
+                key = categorize(event)
+                if key.keystate == KeyEvent.key_down:
+                    code = key.keycode if isinstance(key.keycode, str) else key.keycode[0]
+                    if code in shift_keys:
+                        shifted = True
+                    elif code == "KEY_ENTER":
+                        self._handle_raw("".join(buffer))
+                        buffer.clear()
+                    elif code in keymap:
+                        buffer.append(keymap[code][1 if shifted else 0])
+                elif key.keystate == KeyEvent.key_up:
+                    code = key.keycode if isinstance(key.keycode, str) else key.keycode[0]
+                    if code in shift_keys:
+                        shifted = False
 
     def _handle_raw(self, raw: str):
-        token = raw.strip().lower()
+        token = normalize_token(raw)
         if _is_email(token):
             log.info("QR scan accepted: %s", token)
             self._last_scan_at = time.time()
